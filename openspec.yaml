@@ -1,0 +1,560 @@
+# OpenSpec Project Configuration
+# 智能测试平台 - Spring Cloud 架构转型项目
+# Version: 2.0.0
+# Last Updated: 2026-05-15
+
+project:
+  name: "smart-testing-platform"
+  description: "智能测试中台 - 基于 Spring Cloud 微服务架构的 AI 驱动测试执行平台"
+  version: "2.0.0"
+  language: "zh-CN"
+  owner: "研发团队"
+  contact: ""
+  
+  # 项目元数据
+  metadata:
+    created: "2026-05-15"
+    architecture: "microservices"
+    domain: "testing-automation"
+    industry: "software-testing"
+
+# 默认工作流配置
+defaults:
+  schema: "spec-driven"
+  profile: "core"
+  delivery: "both"
+  # 默认编码
+  encoding: "UTF-8"
+  # 默认时区
+  timezone: "Asia/Shanghai"
+
+# ============================================================
+# 变更管理配置
+# ============================================================
+changes:
+  # 变更目录
+  directory: "openspec/changes"
+  # 变更命名规范
+  naming:
+    pattern: "kebab-case"
+    prefix: ""
+    examples:
+      - "springcloud-architecture-migration"
+      - "add-user-authentication"
+      - "optimize-test-execution"
+  # 归档配置
+  archive:
+    targetDirectory: "openspec/archive"
+    keepHistory: true
+    archiveAfter: 30  # 完成后30天自动归档
+  # 变更生命周期
+  lifecycle:
+    states:
+      - "draft"      # 草稿
+      - "review"     # 评审中
+      - "approved"   # 已批准
+      - "in-progress"# 实施中
+      - "completed"  # 已完成
+      - "archived"   # 已归档
+
+# ============================================================
+# 规格管理配置
+# ============================================================
+specs:
+  # 规格目录
+  directory: "openspec/specs"
+  # 规格文件命名
+  naming:
+    pattern: "kebab-case"
+    suffix: "-spec"
+  # 规格分类
+  categories:
+    - name: "capability"
+      description: "功能能力规格"
+    - name: "api"
+      description: "API 接口规格"
+    - name: "data"
+      description: "数据模型规格"
+    - name: "security"
+      description: "安全规格"
+  # 规格版本控制
+  versioning:
+    enabled: true
+    autoIncrement: true
+
+# ============================================================
+# 工作流配置
+# ============================================================
+workflows:
+  # 启用的工作流
+  enabled:
+    - "propose"    # 提案工作流
+    - "explore"    # 探索模式
+    - "apply"      # 实施工作流
+    - "archive"    # 归档工作流
+  # 提案工作流配置
+  propose:
+    schema: "spec-driven"
+    autoCreateDirs: true
+    requireReview: false
+  # 探索工作流配置
+  explore:
+    defaultMode: "analysis"
+    modes:
+      - "analysis"     # 分析模式
+      - "brainstorm"   # 头脑风暴
+      - "troubleshooting" # 问题排查
+  # 实施工作流配置
+  apply:
+    trackProgress: true
+    autoCommit: false
+    createBranch: true
+    branchPrefix: "feature/"
+    requireTests: false
+  # 归档工作流配置
+  archive:
+    updateMainSpecs: true
+    createReleaseNotes: true
+    tagRelease: true
+
+# ============================================================
+# 项目特定上下文（供 AI 使用）
+# ============================================================
+context:
+  # 项目概述
+  overview:
+    tagline: "AI 驱动的智能测试中台"
+    vision: "通过 AI 技术实现测试用例的智能生成与执行"
+    mission: "提升测试效率，降低测试成本"
+
+  # 技术栈
+  techStack:
+    # Java 技术栈
+    java:
+      version: "11"
+      buildTool: "Maven"
+      mavenVersion: "3.8+"
+    # Spring 生态
+    spring:
+      boot: "2.7.x"
+      cloud: "2021.0.x"
+      cloudAlibaba: "2021.0.1.0"
+    # 后端
+    backend:
+      primary: "Spring Boot 2.x"
+      secondary: "Node.js (Engine Service)"
+      nodeVersion: "18.x"
+    # 数据库
+    databases:
+      - name: "MySQL"
+        version: "8.0"
+        engine: "InnoDB"
+      - name: "H2"
+        purpose: "开发环境测试"
+    orm: "MyBatis Plus"
+    # 微服务
+    microservices:
+      registry: "Eureka"
+      registryVersion: "3.1.0"
+      gateway: "Spring Cloud Gateway"
+      gatewayVersion: "3.1.0"
+      framework: "Spring Cloud"
+      feign: "OpenFeign"
+      circuitBreaker: "Sentinel"
+    # 测试
+    testing:
+      engine: "Midscene"
+      runtime: "Node.js"
+      reportFormat: ["HTML", "JSON"]
+    # 前端
+    frontend:
+      framework: "原生 HTML/JS"
+      buildTool: "Vite"
+    # DevOps
+    devops:
+      container: "Docker"
+      orchestration: "Docker Compose"
+      cicd: "可选"
+
+  # 端口配置
+  ports:
+    gateway: 8080
+    platformService: 8081
+    engineService: 3001
+    eurekaServer: 8761
+    mysql: 3306
+    # 保留端口范围
+    reservedRange: "8000-8999"
+  # 服务配置
+  services:
+    gateway:
+      name: "gateway"
+      replicas: 1
+      healthPath: "/actuator/health"
+    platform:
+      name: "platform-service"
+      replicas: 1
+      healthPath: "/actuator/health"
+    engine:
+      name: "engine-service"
+      replicas: 1
+      healthPath: "/api/engine/health"
+    eureka:
+      name: "eureka-server"
+      replicas: 1
+      dashboardPath: "/"
+
+  # 目录结构
+  directories:
+    backend: "backend"
+    engineService: "backend/engine-service"
+    platformService: "backend/platform-service"
+    eurekaServer: "backend/eureka-server"
+    gateway: "backend/gateway"
+    legacy: "server"
+    scripts: "backend/scripts"
+    reports: "backend/reports"
+    config: "backend/config"
+
+  # API 配置
+  api:
+    basePath: "/api"
+    versionHeader: "X-API-Version"
+    defaultVersion: "v1"
+    versioning:
+      enabled: false
+      strategy: "path"  # path | header | param
+    pagination:
+      defaultSize: 20
+      maxSize: 100
+    formats:
+      request: "JSON"
+      response: "JSON"
+    # 错误响应格式
+    errorResponse:
+      code: "errorCode"
+      message: "message"
+      details: "details"
+      timestamp: "timestamp"
+      path: "path"
+
+  # 数据库配置
+  database:
+    mysql:
+      host: "localhost"
+      port: 3306
+      database: "smart_testing"
+      username: "root"
+      password: ""
+      pool:
+        minIdle: 5
+        maxActive: 20
+        maxLifetime: 1800000
+        connectionTimeout: 30000
+
+  # Midscene 配置
+  midscene:
+    scriptDir: "backend/engine-service/scripts"
+    reportDir: "backend/reports"
+    maxConcurrentTasks: 5
+    taskTimeout: 600000  # 10分钟
+    logLevel: "info"
+
+# ============================================================
+# API 接口定义（用于生成客户端）
+# ============================================================
+apiSpecifications:
+  # Platform Service API
+  platform:
+    baseUrl: "http://localhost:8081"
+    paths:
+      projects: "/api/platform/projects"
+      cases: "/api/platform/cases"
+      execute: "/api/platform/cases/execute"
+      reports: "/api/platform/reports"
+      config: "/api/platform/config"
+  # Engine Service API
+  engine:
+    baseUrl: "http://localhost:3001"
+    paths:
+      execute: "/api/engine/execute"
+      status: "/api/engine/status"
+      task: "/api/engine/task"
+      report: "/api/engine/report"
+      health: "/api/engine/health"
+      sseLogs: "/sse/logs"
+
+# ============================================================
+# 数据模型定义
+# ============================================================
+dataModels:
+  Project:
+    table: "projects"
+    fields:
+      - name: "id"
+        type: "Long"
+        primaryKey: true
+        autoIncrement: true
+      - name: "name"
+        type: "String"
+        required: true
+        maxLength: 100
+      - name: "description"
+        type: "String"
+        maxLength: 500
+      - name: "createdBy"
+        type: "Long"
+        description: "创建人用户ID"
+        foreignKey: "users.id"
+      - name: "status"
+        type: "String"
+        default: "active"
+      - name: "created_at"
+        type: "DateTime"
+      - name: "updated_at"
+        type: "DateTime"
+    indexes:
+      - name: "idx_name"
+        fields: ["name"]
+      - name: "idx_status"
+        fields: ["status"]
+
+  TestCase:
+    table: "test_cases"
+    fields:
+      - name: "id"
+        type: "Long"
+        primaryKey: true
+        autoIncrement: true
+      - name: "project_id"
+        type: "Long"
+        required: true
+        foreignKey: "projects.id"
+      - name: "name"
+        type: "String"
+        required: true
+        maxLength: 100
+      - name: "description"
+        type: "String"
+        maxLength: 500
+      - name: "test_data"
+        type: "JSON"
+        description: "测试数据 JSON"
+      - name: "expected_result"
+        type: "String"
+        maxLength: 1000
+      - name: "status"
+        type: "String"
+        default: "draft"
+      - name: "created_at"
+        type: "DateTime"
+      - name: "updated_at"
+        type: "DateTime"
+    indexes:
+      - name: "idx_project_id"
+        fields: ["project_id"]
+
+  Report:
+    table: "reports"
+    fields:
+      - name: "id"
+        type: "Long"
+        primaryKey: true
+        autoIncrement: true
+      - name: "case_id"
+        type: "Long"
+        foreignKey: "test_cases.id"
+      - name: "task_id"
+        type: "String"
+        required: true
+      - name: "status"
+        type: "String"
+        enum: ["pending", "running", "completed", "failed", "cancelled"]
+      - name: "result_file"
+        type: "String"
+        description: "报告文件路径"
+      - name: "duration"
+        type: "Long"
+        description: "执行耗时(毫秒)"
+      - name: "executed_at"
+        type: "DateTime"
+      - name: "created_at"
+        type: "DateTime"
+    indexes:
+      - name: "idx_case_id"
+        fields: ["case_id"]
+      - name: "idx_task_id"
+        fields: ["task_id"]
+
+  AiConfig:
+    table: "ai_config"
+    fields:
+      - name: "id"
+        type: "Long"
+        primaryKey: true
+        autoIncrement: true
+      - name: "config_key"
+        type: "String"
+        required: true
+        unique: true
+      - name: "config_value"
+        type: "String"
+        required: true
+      - name: "description"
+        type: "String"
+      - name: "updated_at"
+        type: "DateTime"
+
+# ============================================================
+# 错误码规范
+# ============================================================
+errorCodes:
+  # 系统错误 (1000-1999)
+  system:
+    1001: "系统内部错误"
+    1002: "服务不可用"
+    1003: "服务调用超时"
+  # 业务错误 (2000-2999)
+  business:
+    2001: "资源不存在"
+    2002: "资源已存在"
+    2003: "参数验证失败"
+    2004: "操作不允许"
+  # 执行错误 (3000-3999)
+  execution:
+    3001: "执行任务不存在"
+    3002: "执行任务失败"
+    3003: "执行超时"
+    3004: "Midscene 引擎错误"
+  # 配置错误 (4000-4999)
+  config:
+    4001: "AI 配置未找到"
+    4002: "AI 配置无效"
+    4003: "API Key 无效"
+
+# ============================================================
+# 安全配置
+# ============================================================
+security:
+  # CORS 配置
+  cors:
+    enabled: true
+    allowedOrigins:
+      - "http://localhost:5173"
+      - "http://localhost:3000"
+    allowedMethods:
+      - "GET"
+      - "POST"
+      - "PUT"
+      - "DELETE"
+      - "OPTIONS"
+    allowedHeaders:
+      - "*"
+    allowCredentials: true
+    maxAge: 3600
+  # 认证配置（预留）
+  authentication:
+    enabled: false
+    type: "jwt"
+    tokenHeader: "Authorization"
+    tokenPrefix: "Bearer"
+
+# ============================================================
+# 监控与日志配置
+# ============================================================
+monitoring:
+  # Actuator 配置
+  actuator:
+    enabled: true
+    basePath: "/actuator"
+    endpoints:
+      health: true
+      info: true
+      metrics: true
+      env: false
+      beans: false
+  # 日志配置
+  logging:
+    level:
+      root: "INFO"
+      com.smarttesting: "DEBUG"
+    pattern:
+      console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+      file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file:
+      enabled: true
+      name: "logs/application.log"
+      maxSize: "10MB"
+      maxHistory: 30
+
+# ============================================================
+# AI 工具集成
+# ============================================================
+tools:
+  # 启用的 AI 工具
+  enabled:
+    - "codebuddy"
+  # 默认工具
+  default: "codebuddy"
+  # 工具特定配置
+  codebuddy:
+    skillPath: ".codebuddy/skills"
+    teamMode: "async"
+
+# ============================================================
+# 验证规则
+# ============================================================
+validation:
+  # 变更验证
+  change:
+    requireProposal: true
+    requireDesign: true
+    requireSpecs: true
+    requireTasks: true
+    requireApproval: false
+  # 规格验证
+  spec:
+    requireScenarios: true
+    requireAcceptanceCriteria: true
+    requireErrorHandling: true
+    requireExamples: true
+  # 命名验证
+  naming:
+    requirementName: "PascalCase"
+    scenarioName: "camelCase"
+    tableName: "snake_case"
+    fieldName: "camelCase"
+
+# ============================================================
+# 通知与跟踪
+# ============================================================
+notifications:
+  # 变更状态通知
+  changeStatus:
+    onCreate: true
+    onComplete: true
+    channels:
+      - "console"
+  # 归档通知
+  archive:
+    notifyOnArchive: false
+  # 实施进度
+  progress:
+    onTaskComplete: false
+    onMilestoneComplete: true
+
+# ============================================================
+# 高级配置
+# ============================================================
+advanced:
+  # 草稿模式（不验证即可保存）
+  draftMode: false
+  # 强制模式（跳过确认提示）
+  forceMode: false
+  # 调试模式
+  debugMode: false
+  # 最大文件大小
+  maxFileSize: "10MB"
+  # 自动保存
+  autoSave: true
+  autoSaveInterval: 300  # 秒

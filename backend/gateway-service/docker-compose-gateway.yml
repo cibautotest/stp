@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  # API 网关
+  gateway:
+    image: stp-gateway:latest
+    container_name: stp-gateway
+    restart: always
+    network_mode: host 
+    ports:
+      - "8080:8080"
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://localhost:8761/eureka/
+      - EUREKA_INSTANCE_INSTANCE-ID=localhost:8080
+      - EXECUTE_HOST=localhost
+      - JAVA_OPTS=-javaagent:/app/skywalking-agent/skywalking-agent.jar
+      - SW_AGENT_NAME=gateway-service
+      - SW_AGENT_INSTANCE_NAME=stp-gateway
+      - SW_AGENT_COLLECTOR_BACKEND_SERVICES=127.0.0.1:11800
+      - GATEWAY_CORS_ALLOWED_ORIGINS=http://localhost

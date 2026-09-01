@@ -1,0 +1,5 @@
+name: auto-assign-project-owner
+status: draft
+schema: spec-driven
+created: 2026-05-21
+description: 项目创建者自动获得项目访问权限，无需管理员手动分配

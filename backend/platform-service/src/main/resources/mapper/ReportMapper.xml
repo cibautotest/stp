@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.smarttesting.platform.mapper.ReportMapper">
+
+    <select id="pageReportsWithJoin" resultType="com.smarttesting.platform.entity.Report">
+        SELECT
+            r.id,
+            r.case_id,
+            r.name,
+            r.project_id,
+            r.status,
+            r.duration,
+            r.nlp,
+            r.url,
+            r.yaml_flow,
+            r.result,
+            r.error,
+            r.logs,
+            r.created_at,
+            p.name AS project_name
+        FROM reports r
+        LEFT JOIN projects p ON r.project_id = p.id
+        <where>
+            <if test="projectId != null and projectId != ''">
+                AND r.project_id = #{projectId}
+            </if>
+        </where>
+        ORDER BY r.created_at DESC
+    </select>
+
+</mapper>

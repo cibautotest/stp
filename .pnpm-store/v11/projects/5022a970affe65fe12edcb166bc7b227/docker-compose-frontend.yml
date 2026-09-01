@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  # Platform 业务服务
+  frontend:
+    image: stp-frontend:latest
+    container_name: stp-frontend
+    restart: always
+    network_mode: host
+    environment:
+      - BACKEND_GATEWAY_URL=http://localhost:8080

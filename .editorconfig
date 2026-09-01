@@ -1,0 +1,26 @@
+# Smart Testing Platform - Editor Config
+# 确保 IDE 使用 Java 11 语法级别
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.md]
+trim_trailing_whitespace = false
+
+# Java 文件规范
+[*.java]
+ij_java_conformance_double_quotes = false
+ij_java_editorconfig_title = true
+ij_java_generate_final_locals = true
+ij_java_generate_final_parameters = true
+ij_java_allow_for_enhanced_for_statement_internal = false
+
+# 禁止使用 Java 14+ 特性检查
+ij_java_switch_pairs = false
+ij_java_convert_if_else_to_switch = false

@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Platform 业务服务
+  platform:
+    image: stp-platform:latest
+    container_name: stp-platform
+    restart: always
+    network_mode: host
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://localhost:3306/uitest?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=cib@1234
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://localhost:8761/eureka/
+      - EUREKA_INSTANCE_INSTANCE-ID=localhost:8081
+      - JWT_SECRET=123456789abcdefghijklmn123456789
+      - REPORT_UPLOAD_TOKEN=123456789abcdefghijklmn123456789
+      - SECURITY_COOKIE_SECURE=true
+      - GATEWAY_CORS_ALLOWED_ORIGINS=http://localhost
+      # Force the JVM's network stack to IPv4; JAVA_TOOL_OPTIONS is picked up
+      # automatically by the Java launcher in the image.
+      - JAVA_TOOL_OPTIONS=-Djava.net.preferIPv4Stack=true
+      # Avoid DNS resolving localhost to the IPv6 loopback address (::1).
+      - JAVA_OPTS=-javaagent:/app/skywalking-agent/skywalking-agent.jar
+      - SW_AGENT_NAME=platform-service
+      - SW_AGENT_INSTANCE_NAME=stp-platform
+      - SW_AGENT_COLLECTOR_BACKEND_SERVICES=127.0.0.1:11800
+      

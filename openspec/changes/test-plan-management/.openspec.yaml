@@ -1,0 +1,5 @@
+name: test-plan-management
+status: draft
+schema: spec-driven
+created: 2026-05-21
+description: 新增测试计划模块，支持用户将测试用例组织成可管理的执行计划
