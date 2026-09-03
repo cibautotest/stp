@@ -1,0 +1,31 @@
+{
+   "action": {
+      "default_icon": "icon128.png",
+      "default_title": "Midscene.js"
+   },
+   "background": {
+      "service_worker": "./scripts/worker.js"
+   },
+   "content_security_policy": {
+      "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+   },
+   "description": "Open-source SDK for automating web pages using natural language through AI.",
+   "host_permissions": [ "\u003Call_urls>" ],
+   "icons": {
+      "128": "icon128.png"
+   },
+   "incognito": "split",
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1UFoglAF7z3VblxEgXp0joku5CeDhMp7SO5bsNcQjYV8w7jTSZ1PUsVX7cTzeaZqxtU4s9vRNrJbkdcyDisgFmw16q0LP1RribzeXiL8yM4QGEhAHdVi8iqrTdOMzESi+GHm2gnoTuCrfjiYz7+7h6DBuXlla3bSLHfjcXAVgXzS13eJZPztkWXk6/j/fzlol12zCPQNJZ8xpIlI1MOcVoUtm3egW8VeZUfFaawbej+Xf7RSyFkV2zNdOMhex6hxelxSd/02R9DehpH8LRh01CZXU1mU9xrtx8sXG6zvGw5tFqSlcwzIvjqALZMAKywcXbCQQZV8F/U4L6KX7Ab6aQIDAQAB",
+   "manifest_version": 3,
+   "name": "Midscene.js",
+   "permissions": [ "activeTab", "tabs", "sidePanel", "debugger", "scripting", "storage", "alarms" ],
+   "side_panel": {
+      "default_path": "./index.html"
+   },
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "1.92",
+   "web_accessible_resources": [ {
+      "matches": [ "\u003Call_urls>" ],
+      "resources": [ "*.wasm" ]
+   } ]
+}

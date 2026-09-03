@@ -28,8 +28,8 @@
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
-    "@midscene/core": "^1.12.1",
-    "@midscene/web": "^1.12.1",
+    "@midscene/core": "1.12.2",
+    "@midscene/web": "1.12.2",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.0",
     "@types/node-cron": "^3.0.11",

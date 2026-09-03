@@ -1,0 +1,792 @@
+<!doctype html>
+<html>
+<head>
+  <title>Midscene</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+
+  </style>
+  <style>
+    /* ─── Export toolbar ─────────────────────────────────── */
+    #midscene-toolbar {
+      display: flex;
+      align-items: center;
+      padding: 6px 12px;
+      background: var(--midscene-toolbar-bg, #f5f5f5);
+      border-bottom: 1px solid var(--midscene-toolbar-border, #ddd);
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    #midscene-toolbar .toolbar-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--midscene-toolbar-text, #333);
+      flex: 1;
+    }
+    #midscene-export-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      font-size: 12px;
+      background: #3388FF;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+      white-space: nowrap;
+    }
+    #midscene-export-btn:hover {
+      background: #1A75FF;
+    }
+    #midscene-logout-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      font-size: 11px;
+      background: transparent;
+      color: #dc2626;
+      border: 1px solid #fca5a1;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    #midscene-logout-btn:hover {
+      background: #fef2f2;
+    }
+    #midscene-export-btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    #midscene-export-btn.loading::after {
+      content: '';
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: midscene-spin 0.6s linear infinite;
+    }
+    @keyframes midscene-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ─── Export modal ───────────────────────────────────── */
+    #midscene-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #midscene-modal-overlay.active {
+      display: flex;
+    }
+    #midscene-modal {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+      max-width: 90vw;
+      max-height: 85vh;
+      width: 700px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #midscene-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    #midscene-modal-header h3 {
+      margin: 0;
+      font-size: 15px;
+      color: #111827;
+    }
+    #midscene-modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: #6b7280;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    #midscene-modal-close:hover { color: #111827; }
+    #midscene-modal-body {
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    /* Feedback banner */
+    .midscene-msg-banner {
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.5;
+      font-weight: 500;
+      display: none;
+      overflow: hidden;
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.3s ease-out, opacity 0.25s ease-out;
+    }
+    .midscene-msg-banner.show {
+      display: block;
+      max-height: 120px;
+      opacity: 1;
+    }
+    .midscene-msg-banner.hide {
+      max-height: 0;
+      opacity: 0;
+      transition: max-height 0.25s ease-in, opacity 0.2s ease-in;
+    }
+    .midscene-msg-banner.error {
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+    .midscene-msg-banner.success {
+      background: #f0fdf4;
+      color: #16a34a;
+      border: 1px solid #bbf7d0;
+    }
+    .midscene-msg-banner.warning {
+      background: #fffbeb;
+      color: #d97706;
+      border: 1px solid #fde68a;
+    }
+    #midscene-modal-body pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #1f2937;
+    }
+    #midscene-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 10px 16px;
+      border-top: 1px solid #e5e7eb;
+    }
+    #midscene-modal-footer button {
+      padding: 6px 14px;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #374151;
+    }
+    #midscene-modal-footer button:hover { background: #f3f4f6; }
+    #midscene-modal-footer .copy-btn {
+      background: #3388FF;
+      color: #fff;
+      border-color: #3388FF;
+    }
+    #midscene-modal-footer .copy-btn:hover { background: #1A75FF; }
+    #midscene-modal-body .empty-msg {
+      color: #6b7280;
+      font-size: 13px;
+      text-align: center;
+      padding: 40px 0;
+    }
+    #midscene-modal-body .error-msg {
+      color: #dc2626;
+      font-size: 13px;
+    }
+
+    /* ─── Form inputs ──────────────────────────────── */
+    .midscene-form-group {
+      margin-bottom: 10px;
+    }
+    .midscene-form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    .midscene-form-group input {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    .midscene-form-group input:focus {
+      border-color: #3388FF;
+      box-shadow: 0 0 0 2px rgba(51,136,255,0.15);
+    }
+
+    /* ─── Step list ────────────────────────────────── */
+    .midscene-step-list {
+      margin-top: 6px;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+    .midscene-step-list-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      padding: 8px 10px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f9fafb;
+    }
+    .midscene-step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+    .midscene-step-item:last-child {
+      border-bottom: none;
+    }
+    .midscene-step-item:hover {
+      background: #f9fafb;
+    }
+    .midscene-step-item.checked {
+      background: #f0f7ff;
+    }
+    .midscene-step-checkbox {
+      flex-shrink: 0;
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: #3388FF;
+    }
+    .midscene-step-status {
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: bold;
+      color: #fff;
+    }
+    .midscene-step-status.success {
+      background: #00c758;
+    }
+    .midscene-step-status.failure {
+      background: #fb2c36;
+    }
+    .midscene-step-status.loading {
+      background: #1890ff;
+      animation: midscene-step-pulse 1s ease-in-out infinite;
+    }
+    @keyframes midscene-step-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .midscene-step-text {
+      flex: 1;
+      word-break: break-word;
+      color: #1f2937;
+      line-height: 1.4;
+    }
+    .midscene-step-item.disabled .midscene-step-text {
+      color: #9ca3af;
+      text-decoration: line-through;
+    }
+    /* Step count badge */
+    .midscene-step-count {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    /* ─── Auth overlay (login mask) ─────────────────── */
+    #midscene-auth-overlay {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.97);
+      z-index: 9998;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #midscene-auth-overlay.active {
+      display: flex;
+    }
+    #midscene-auth-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+      padding: 32px 28px;
+      width: 340px;
+      max-width: 90%;
+      text-align: center;
+    }
+    #midscene-auth-card h3 {
+      margin: 0 0 4px 0;
+      font-size: 18px;
+      color: #111827;
+    }
+    #midscene-auth-card .auth-subtitle {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 20px;
+    }
+    #midscene-auth-card .auth-form-group {
+      margin-bottom: 14px;
+      text-align: left;
+    }
+    #midscene-auth-card .auth-form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    #midscene-auth-card .auth-form-group input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    #midscene-auth-card .auth-form-group input:focus {
+      border-color: #3388FF;
+      box-shadow: 0 0 0 2px rgba(51,136,255,0.15);
+    }
+    #midscene-auth-error {
+      display: none;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      background: #fef2f2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: center;
+    }
+    #midscene-auth-error.show {
+      display: block;
+    }
+    #midscene-auth-login-btn {
+      width: 100%;
+      padding: 9px 0;
+      font-size: 14px;
+      font-weight: 600;
+      background: #3388FF;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #midscene-auth-login-btn:hover {
+      background: #1A75FF;
+    }
+    #midscene-auth-login-btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    /* ─── Project selection dialog ─────────────────── */
+    #midscene-project-dialog-overlay {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255,255,255,0.97);
+      z-index: 9998;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    #midscene-project-dialog-overlay.active {
+      display: flex;
+    }
+    #midscene-project-dialog-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+      padding: 28px 24px;
+      width: 360px;
+      max-width: 90%;
+      text-align: center;
+    }
+    #midscene-project-dialog-card h3 {
+      margin: 0 0 4px 0;
+      font-size: 17px;
+      color: #111827;
+    }
+    #midscene-project-dialog-card .proj-subtitle {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 18px;
+    }
+    #midscene-project-dialog-card .proj-form-group {
+      margin-bottom: 14px;
+      text-align: left;
+    }
+    #midscene-project-dialog-card .proj-form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    #midscene-project-dialog-card select,
+    #midscene-project-dialog-card .proj-input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+      background: #fff;
+      color: #111827;
+    }
+    #midscene-project-dialog-card select:focus,
+    #midscene-project-dialog-card .proj-input:focus {
+      border-color: #3388FF;
+      box-shadow: 0 0 0 2px rgba(51,136,255,0.15);
+    }
+    #midscene-new-project-wrap {
+      display: none;
+    }
+    #midscene-new-project-wrap.show {
+      display: block;
+    }
+    #midscene-project-empty-msg {
+      display: none;
+      text-align: center;
+      color: #9ca3af;
+      font-size: 13px;
+      padding: 8px 0;
+    }
+    #midscene-project-dialog-btns {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+    #midscene-project-dialog-btns button {
+      flex: 1;
+      padding: 8px 0;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #374151;
+      transition: background 0.2s;
+    }
+    #midscene-project-dialog-btns button:hover {
+      background: #f3f4f6;
+    }
+    #midscene-project-dialog-btns .proj-confirm-btn {
+      background: #3388FF;
+      color: #fff;
+      border-color: #3388FF;
+    }
+    #midscene-project-dialog-btns .proj-confirm-btn:hover {
+      background: #1A75FF;
+    }
+    #midscene-project-dialog-btns .proj-confirm-btn:disabled {
+      background: #9ca3af;
+      border-color: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    /* ─── Select form-group styling ───────────────── */
+    .midscene-form-group select {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      outline: none;
+      box-sizing: border-box;
+      background: #fff;
+      color: #111827;
+      transition: border-color 0.2s;
+    }
+    .midscene-form-group select:focus {
+      border-color: #3388FF;
+      box-shadow: 0 0 0 2px rgba(51,136,255,0.15);
+    }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      #midscene-toolbar {
+        background: #1f2937;
+        border-bottom-color: #374151;
+      }
+      #midscene-toolbar .toolbar-title {
+        color: #e5e7eb;
+      }
+      #midscene-modal {
+        background: #1f2937;
+      }
+      #midscene-modal-header {
+        border-bottom-color: #374151;
+      }
+      #midscene-modal-header h3 {
+        color: #f3f4f6;
+      }
+      #midscene-modal-body pre {
+        color: #e5e7eb;
+      }
+      #midscene-modal-footer {
+        border-top-color: #374151;
+      }
+      #midscene-modal-footer button {
+        background: #374151;
+        color: #e5e7eb;
+        border-color: #4b5563;
+      }
+      #midscene-modal-footer button:hover { background: #4b5563; }
+      .midscene-form-group label { color: #e5e7eb; }
+      .midscene-form-group input {
+        background: #374151;
+        border-color: #4b5563;
+        color: #e5e7eb;
+      }
+      .midscene-form-group input:focus { border-color: #54a2ff; }
+      .midscene-step-list { border-color: #374151; }
+      .midscene-step-list-title {
+        color: #e5e7eb;
+        background: #1f2937;
+        border-bottom-color: #374151;
+      }
+      .midscene-step-item { border-bottom-color: #374151; }
+      .midscene-step-item:hover { background: #374151; }
+      .midscene-step-item.checked { background: #1e3a5f; }
+      .midscene-step-text { color: #e5e7eb; }
+      .midscene-step-item.disabled .midscene-step-text { color: #6b7280; }
+      .midscene-step-count { color: #9ca3af; }
+      .midscene-step-status.loading { background: #40a9ff; }
+      .midscene-msg-banner.error {
+        background: #3b1818;
+        color: #fca5a5;
+        border-color: #7f1d1d;
+      }
+      .midscene-msg-banner.success {
+        background: #143622;
+        color: #86efac;
+        border-color: #14532d;
+      }
+      .midscene-msg-banner.warning {
+        background: #332a0f;
+        color: #fde68a;
+        border-color: #713f12;
+      }
+      /* Auth overlay dark */
+      #midscene-logout-btn {
+        color: #fca5a5;
+        border-color: #7f1d1d;
+      }
+      #midscene-logout-btn:hover {
+        background: #3b1818;
+      }
+      #midscene-user-display { color: #9ca3af; }
+      #midscene-auth-overlay {
+        background: rgba(17,24,39,0.97);
+      }
+      #midscene-auth-card {
+        background: #1f2937;
+      }
+      #midscene-auth-card h3 { color: #f3f4f6; }
+      #midscene-auth-card .auth-subtitle { color: #9ca3af; }
+      #midscene-auth-card .auth-form-group label { color: #e5e7eb; }
+      #midscene-auth-card .auth-form-group input {
+        background: #374151;
+        border-color: #4b5563;
+        color: #e5e7eb;
+      }
+      #midscene-auth-card .auth-form-group input:focus { border-color: #54a2ff; }
+      /* Project dialog dark */
+      #midscene-project-dialog-overlay {
+        background: rgba(17,24,39,0.97);
+      }
+      #midscene-project-dialog-card {
+        background: #1f2937;
+      }
+      #midscene-project-dialog-card h3 { color: #f3f4f6; }
+      #midscene-project-dialog-card .proj-subtitle { color: #9ca3af; }
+      #midscene-project-dialog-card .proj-form-group label { color: #e5e7eb; }
+      #midscene-project-dialog-card select,
+      #midscene-project-dialog-card .proj-input {
+        background: #374151;
+        border-color: #4b5563;
+        color: #e5e7eb;
+      }
+      #midscene-project-dialog-card select:focus,
+      #midscene-project-dialog-card .proj-input:focus { border-color: #54a2ff; }
+      #midscene-project-dialog-btns button {
+        background: #374151;
+        color: #e5e7eb;
+        border-color: #4b5563;
+      }
+      #midscene-project-dialog-btns button:hover { background: #4b5563; }
+      .midscene-form-group select {
+        background: #374151;
+        border-color: #4b5563;
+        color: #e5e7eb;
+      }
+      .midscene-form-group select:focus { border-color: #54a2ff; }
+    }
+  </style>
+  <script defer src="/scripts/auth.js"></script>
+  <script defer src="/scripts/export-test-case.js"></script>
+  <script defer src="/static/js/lib-polyfill.cd23d531.js"></script>
+  <script defer src="/static/js/lib-react.9a9b147a.js"></script>
+  <script defer src="/static/js/817.e8e7f878.js"></script>
+  <script defer src="/static/js/105.6da195f4.js"></script>
+  <script defer src="/static/js/78.e50fb5dd.js"></script>
+  <script defer src="/static/js/924.242f5cf6.js"></script>
+  <script defer src="/static/js/121.0aae6701.js"></script>
+  <script defer src="/static/js/index.ac5049b9.js"></script>
+</head>
+<body>
+  <div id="midscene-toolbar">
+    <span class="toolbar-title">可视化操作平台</span>
+    <span id="midscene-contact-icon" title="如有疑问请联系平台负责人：唐天野、田少聪、李玮" style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#e5e7eb;color:#6b7280;font-size:11px;font-weight:bold;cursor:help;margin-left:4px;line-height:1;">?</span>
+    <span id="midscene-user-display" style="display:none; font-size:12px; color:#6b7280; margin-right:6px;">用户: -</span>
+    <button id="midscene-logout-btn" style="display:none;" title="退出登录">登出</button>
+    <button id="midscene-export-btn">导出步骤</button>
+  </div>
+  <div id="root"></div>
+  <script>
+    // 隐藏 React 渲染的版本号
+    (function() {
+      var root = document.getElementById('root');
+      if (!root || !root.children.length) { setTimeout(arguments.callee, 500); return; }
+      var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      var node;
+      while (node = walker.nextNode()) {
+        if (node.textContent && (node.textContent.includes('Midscene.js version') || node.textContent.includes('SDK v'))) {
+          node.parentElement && (node.parentElement.style.display = 'none');
+        }
+      }
+    })();
+  </script>
+
+  <!-- ─── Export Result Modal ─────────────────────────── -->
+  <div id="midscene-modal-overlay">
+    <div id="midscene-modal">
+      <div id="midscene-modal-header">
+        <h3>生成测试用例</h3>
+        <button id="midscene-modal-close">&times;</button>
+      </div>
+      <div id="midscene-modal-body">
+        <!-- Feedback banner -->
+        <div id="midscene-msg-banner" class="midscene-msg-banner"></div>
+        <!-- Form -->
+        <div class="midscene-form-group">
+          <label for="midscene-project-select">项目名称</label>
+          <select id="midscene-project-select">
+            <option value="">— 请选择项目 —</option>
+          </select>
+        </div>
+        <div class="midscene-form-group" id="midscene-new-project-group" style="display:none;">
+          <label for="midscene-new-project-input">新建项目名称</label>
+          <input type="text" id="midscene-new-project-input" placeholder="请输入新项目名称">
+        </div>
+        <div class="midscene-form-group">
+          <label for="midscene-case-name">用例名称</label>
+          <input type="text" id="midscene-case-name" placeholder="请输入用例名称">
+        </div>
+        <div class="midscene-form-group">
+          <label for="midscene-test-url">测试网址</label>
+          <input type="url" id="midscene-test-url" placeholder="请输入测试网址，如 https://example.com">
+        </div>
+        <!-- Step list -->
+        <div class="midscene-step-list">
+          <div class="midscene-step-list-title">测试步骤</div>
+          <div id="midscene-steps-container"></div>
+        </div>
+        <div class="midscene-step-count" id="midscene-step-count">已选择 0 个步骤</div>
+      </div>
+      <div id="midscene-modal-footer">
+        <button id="midscene-modal-close-btn">取消</button>
+        <button id="midscene-modal-copy-btn" class="copy-btn">生成用例</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Login Overlay ──────────────────────────────── -->
+  <div id="midscene-auth-overlay" class="active">
+    <div id="midscene-auth-card">
+      <h3>登录平台</h3>
+      <p class="auth-subtitle">请输入您的账号密码以继续使用</p>
+      <div id="midscene-auth-error">账号/密码错误，请重新输入</div>
+      <div class="auth-form-group">
+        <label for="midscene-auth-username">账号</label>
+        <input type="text" id="midscene-auth-username" placeholder="请输入账号" autocomplete="username">
+      </div>
+      <div class="auth-form-group">
+        <label for="midscene-auth-password">密码</label>
+        <input type="password" id="midscene-auth-password" placeholder="请输入密码" autocomplete="current-password">
+      </div>
+      <button id="midscene-auth-login-btn">登录</button>
+    </div>
+  </div>
+
+  <!-- ─── Project Selection Dialog ───────────────────── -->
+  <div id="midscene-project-dialog-overlay">
+    <div id="midscene-project-dialog-card">
+      <h3>选择项目</h3>
+      <p class="proj-subtitle" id="midscene-proj-dialog-user"></p>
+      <div id="midscene-project-empty-msg">暂无可用项目，请创建一个</div>
+      <div class="proj-form-group">
+        <label for="midscene-proj-dialog-select">项目</label>
+        <select id="midscene-proj-dialog-select">
+          <option value="">— 请选择项目 —</option>
+        </select>
+      </div>
+      <div class="proj-form-group" id="midscene-proj-dialog-new-wrap" style="display:none;">
+        <label for="midscene-proj-dialog-new-input">新建项目名称</label>
+        <input type="text" id="midscene-proj-dialog-new-input" class="proj-input" placeholder="请输入新项目名称">
+      </div>
+      <div id="midscene-project-dialog-btns">
+        <button id="midscene-proj-dialog-cancel">取消</button>
+        <button id="midscene-proj-dialog-confirm" class="proj-confirm-btn" disabled>确认</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

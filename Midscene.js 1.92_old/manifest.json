@@ -1,0 +1,29 @@
+{
+  "action": {
+    "default_icon": "icon128.png",
+    "default_title": "Midscene.js"
+  },
+  "background": {
+    "service_worker": "./scripts/worker.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
+  "description": "Open-source SDK for automating web pages using natural language through AI.",
+  "host_permissions": [ "\u003Call_urls>" ],
+  "icons": {
+    "128": "icon128.png"
+  },
+  "incognito": "split",
+  "manifest_version": 3,
+  "name": "测试用例可视化插件",
+  "permissions": [ "activeTab", "tabs", "sidePanel", "debugger", "scripting", "storage", "alarms" ],
+  "side_panel": {
+    "default_path": "./index.html"
+  },
+  "version": "1.92",
+  "web_accessible_resources": [ {
+    "matches": [ "\u003Call_urls>" ],
+    "resources": [ "*.wasm" ]
+  } ]
+}

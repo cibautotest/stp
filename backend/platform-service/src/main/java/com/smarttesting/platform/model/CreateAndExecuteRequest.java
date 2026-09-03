@@ -20,6 +20,11 @@ public class CreateAndExecuteRequest {
     @Schema(description = "Project ID", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 64)
     private String projectId;
 
+    @NotBlank(message = "directoryId is required")
+    @Size(max = 64, message = "directoryId length must be at most 64")
+    @Schema(description = "Case directory ID under the project", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 64)
+    private String directoryId;
+
     @NotBlank(message = "name is required")
     @Size(max = 100, message = "name length must be at most 100")
     @Schema(description = "Case name", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)

@@ -48,6 +48,7 @@ public class CreateAndExecuteService {
         // Step 1: 构建 TestCase 并保存
         TestCase testCase = new TestCase();
         testCase.setProjectId(request.getProjectId());
+        testCase.setDirectoryId(request.getDirectoryId());
         testCase.setName(request.getName() != null ? request.getName() : extractName(request.getNlp()));
         testCase.setDescription(request.getDescription());
         testCase.setNlp(request.getNlp());

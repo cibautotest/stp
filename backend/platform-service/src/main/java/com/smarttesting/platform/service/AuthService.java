@@ -72,7 +72,9 @@ public class AuthService {
                 token, 24 * 60 * 60, cookieSecure ? "; Secure" : ""));
 
         // 6. 返回结果（不包含密码）
+        // token 同时放入响应体，供 Chrome 插件等无法读取 HttpOnly Cookie 的跨源客户端使用
         Map<String, Object> result = new HashMap<>();
+        result.put("token", token);
 
         Map<String, Object> userInfo = new HashMap<>();
         userInfo.put("id", user.getId());

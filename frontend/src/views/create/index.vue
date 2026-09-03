@@ -357,6 +357,7 @@ const handleExecuteAndSave = async () => {
     const result = await caseStore.runCaseAsync(
       {
         projectId: currentProjectId.value,
+        directoryId: directoryId.value,
         name: caseName.value.trim(),
         description: caseDescription.value.trim() || undefined,
         nlp: nlpInstruction.value,

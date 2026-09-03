@@ -53,6 +53,7 @@ export const getCaseCache = (id: string) => request.get<string>(`/platform/cases
 // 创建用例并异步执行
 export const createAndExecute = (data: {
   projectId: string
+  directoryId: string
   name: string
   description?: string
   nlp: string

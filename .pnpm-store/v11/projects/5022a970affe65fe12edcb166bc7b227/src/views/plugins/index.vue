@@ -14,7 +14,7 @@
             </p>
             <div class="plugin-hero-bottom">
               <div class="plugin-meta">
-                <el-tag type="primary" effect="dark">版本 v1.52</el-tag>
+                <el-tag type="primary" effect="dark">版本 v1.92</el-tag>
                 <el-tag effect="dark">Chrome 扩展</el-tag>
                 <el-tag type="info" effect="dark">Manifest V3</el-tag>
               </div>
