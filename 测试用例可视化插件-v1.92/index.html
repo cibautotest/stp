@@ -380,6 +380,85 @@
       text-align: right;
     }
 
+    /* ─── Platform URL config dialog ────────────────────── */
+    #midscene-urlconfig-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    #midscene-urlconfig-overlay.active {
+      display: flex;
+    }
+    #midscene-urlconfig-card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+      padding: 24px 24px 18px;
+      width: 360px;
+      max-width: 90%;
+      text-align: center;
+    }
+    #midscene-urlconfig-card h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      color: #111827;
+    }
+    #midscene-urlconfig-card .urlconfig-form-group {
+      margin-bottom: 14px;
+      text-align: left;
+    }
+    #midscene-urlconfig-card .urlconfig-form-group label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 4px;
+    }
+    #midscene-urlconfig-input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      outline: none;
+      box-sizing: border-box;
+    }
+    #midscene-urlconfig-input:focus {
+      border-color: #3388FF;
+      box-shadow: 0 0 0 2px rgba(51,136,255,0.15);
+    }
+    #midscene-urlconfig-btns {
+      display: flex;
+      gap: 10px;
+    }
+    #midscene-urlconfig-btns button {
+      flex: 1;
+      padding: 8px 0;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid #d1d5db;
+      background: #fff;
+      color: #374151;
+    }
+    #midscene-urlconfig-btns button:hover { background: #f3f4f6; }
+    #midscene-urlconfig-save {
+      background: #3388FF !important;
+      color: #fff !important;
+      border-color: #3388FF !important;
+    }
+    #midscene-urlconfig-save:hover { background: #1A75FF !important; }
+
     /* ─── Random number dialog ───────────────────────────── */
     #midscene-random-card {
       background: #fff;
@@ -897,6 +976,24 @@
       <div id="midscene-modal-footer">
         <button id="midscene-modal-close-btn">取消</button>
         <button id="midscene-modal-copy-btn" class="copy-btn">生成用例</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Platform URL Config Dialog ──────────────────── -->
+  <div id="midscene-urlconfig-overlay">
+    <div id="midscene-urlconfig-card">
+      <h3>连接平台失败</h3>
+      <p style="font-size:12px;color:#6b7280;margin:0 0 14px 0;line-height:1.6;">
+        无法连接到测试平台，请检查平台服务是否已启动，或修改平台地址后重试。
+      </p>
+      <div class="urlconfig-form-group">
+        <label for="midscene-urlconfig-input">平台地址（IP:端口 或完整 URL）</label>
+        <input type="text" id="midscene-urlconfig-input" placeholder="如 http://10.3.71.29:8081">
+      </div>
+      <div id="midscene-urlconfig-btns">
+        <button id="midscene-urlconfig-cancel">取消</button>
+        <button id="midscene-urlconfig-save">保存并重试</button>
       </div>
     </div>
   </div>

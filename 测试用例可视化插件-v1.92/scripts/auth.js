@@ -13,10 +13,16 @@
   'use strict';
 
   // ─── Platform URL ──────────────────────────────────────────
+  var DEFAULT_PLATFORM_URL = 'http://10.3.71.299:8081';
+
   function getPlatformUrl() {
     try {
-      return localStorage.getItem('midscene_platform_url') || 'http://localhost:8081';
-    } catch (e) { return 'http://localhost:8081'; }
+      return localStorage.getItem('midscene_platform_url') || DEFAULT_PLATFORM_URL;
+    } catch (e) { return DEFAULT_PLATFORM_URL; }
+  }
+
+  function setPlatformUrl(url) {
+    try { localStorage.setItem('midscene_platform_url', url); } catch (e) {}
   }
 
   // ─── Login ─────────────────────────────────────────────────

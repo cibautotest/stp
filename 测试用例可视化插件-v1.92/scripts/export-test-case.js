@@ -205,9 +205,10 @@
     return texts.join('');
   }
 
-  // 关键词判定执行结果
+  // 判定执行结果：以 SDK 生成的 "Task failed: ..." 为唯一失败标志
+  // （成功响应的描述性文本可能含 error/失败 等词，宽泛关键词会造成误判）
   function judgeByText(text) {
-    if (/failed|失败|error|错误|cannot|couldn|unable|cannot find|not found|未能|无法|超时|timeout|✗|❌/i.test(text || '')) {
+    if ((text || '').indexOf('Task failed') >= 0) {
       return 'failure';
     }
     return 'success';
@@ -624,11 +625,18 @@
     renderStepList(steps);
   }
 
-  // ─── 清空历史 ──────────────────────────────────────────────
+  // ─── 清空历史：删除该项目全部本地数据（步骤日志 + 已生成指纹） ──
   function handleClearHistory() {
-    if (!confirm('确定清空当前项目的全部步骤记录吗？（不影响已生成的用例与平台数据）')) return;
+    if (!confirm('确定清空当前项目的全部本地记录吗？\n（包含步骤日志与"已生成用例"标记，不影响平台上的用例数据）')) return;
     var projectId = getCurrentProjectId();
+    // 清步骤日志
     clearStepLog(projectId);
+    // 清已生成指纹
+    try {
+      var all = JSON.parse(localStorage.getItem(EXPORTED_KEY) || '{}');
+      delete all[projectId];
+      localStorage.setItem(EXPORTED_KEY, JSON.stringify(all));
+    } catch (e) {}
     renderStepList([]);
   }
 
@@ -714,10 +722,12 @@
   }
 
   // ─── Platform API integration ──────────────────────────────
+  var DEFAULT_PLATFORM_URL = 'http://10.3.71.299:8081';
+
   function getPlatformUrl() {
     try {
-      return localStorage.getItem('midscene_platform_url') || 'http://localhost:8081';
-    } catch (e) { return 'http://localhost:8081'; }
+      return localStorage.getItem('midscene_platform_url') || DEFAULT_PLATFORM_URL;
+    } catch (e) { return DEFAULT_PLATFORM_URL; }
   }
 
   function setBtnLoading(loading) {
@@ -1077,10 +1087,52 @@
       hideAuthOverlay();
       showProjectDialog();
     } else {
-      if (errorEl) { errorEl.textContent = result.error || '账号/密码错误，请重新输入'; errorEl.classList.add('show'); }
+      // 网络错误 → 弹出平台地址配置（可能平台地址不对或平台未启动）
+      if (result.error && result.error.indexOf('网络错误') >= 0) {
+        if (errorEl) { errorEl.textContent = result.error; errorEl.classList.add('show'); }
+        openUrlConfigDialog();
+      } else {
+        if (errorEl) { errorEl.textContent = result.error || '账号/密码错误，请重新输入'; errorEl.classList.add('show'); }
+      }
     }
 
     if (btn) btn.disabled = false;
+  }
+
+  // ─── 平台地址配置弹窗（连接失败时引导用户修正地址） ────────
+  function openUrlConfigDialog() {
+    var overlay = document.getElementById('midscene-urlconfig-overlay');
+    if (!overlay) return;
+    overlay.classList.add('active');
+    var inputEl = document.getElementById('midscene-urlconfig-input');
+    if (inputEl) {
+      inputEl.value = getPlatformUrl();
+      inputEl.focus();
+      inputEl.select();
+    }
+  }
+
+  function closeUrlConfigDialog() {
+    var overlay = document.getElementById('midscene-urlconfig-overlay');
+    if (overlay) overlay.classList.remove('active');
+  }
+
+  function handleUrlConfigSave() {
+    var inputEl = document.getElementById('midscene-urlconfig-input');
+    if (!inputEl) return;
+    var raw = (inputEl.value || '').trim();
+    if (!raw) return;
+
+    // 允许输入 "ip:port" 简写，自动补 http:// 前缀
+    var url = raw.indexOf('://') >= 0 ? raw : 'http://' + raw;
+
+    try { localStorage.setItem('midscene_platform_url', url); } catch (e) {}
+    closeUrlConfigDialog();
+
+    // 修正后自动重试登录（保留账号，密码重填）
+    var errorEl = document.getElementById('midscene-auth-error');
+    if (errorEl) { errorEl.textContent = '已更新平台地址，正在重试连接...'; errorEl.classList.add('show'); }
+    handleLogin();
   }
 
   // ─── Project dialog ────────────────────────────────────────
@@ -1392,6 +1444,8 @@
             if (modalActive) hideModal();
             var randomActive = document.getElementById('midscene-random-overlay').classList.contains('active');
             if (randomActive) closeRandomDialog();
+            var urlActive = document.getElementById('midscene-urlconfig-overlay').classList.contains('active');
+            if (urlActive) closeUrlConfigDialog();
           }
         });
       }
@@ -1410,6 +1464,17 @@
       });
       bindOnce(document.getElementById('midscene-random-overlay'), 'stpRandomOverlay', 'click', function (e) {
         if (e.target === this) closeRandomDialog();
+      });
+
+      // 平台地址配置弹窗事件
+      bindOnce(document.getElementById('midscene-urlconfig-save'), 'stpUrlSave', 'click', handleUrlConfigSave);
+      bindOnce(document.getElementById('midscene-urlconfig-cancel'), 'stpUrlCancel', 'click', closeUrlConfigDialog);
+      bindOnce(document.getElementById('midscene-urlconfig-overlay'), 'stpUrlOverlay', 'click', function (e) {
+        if (e.target === this) closeUrlConfigDialog();
+      });
+      var urlConfigInput = document.getElementById('midscene-urlconfig-input');
+      bindOnce(urlConfigInput, 'stpUrlInput', 'keydown', function (e) {
+        if (e.key === 'Enter') handleUrlConfigSave();
       });
 
       // Auth overlay events
