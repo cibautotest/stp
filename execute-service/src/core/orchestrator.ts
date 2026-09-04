@@ -57,6 +57,8 @@ export class Orchestrator {
       executionMode: input.executionMode ?? 'NLP',
       trafficTaggingEnabled: input.trafficTaggingEnabled ?? config.OBSERVABILITY_ENABLED,
       kafkaConfig: input.kafkaConfig,
+      loginMethod: input.loginMethod,
+      targetUrl: input.targetUrl,
     });
 
     const position = await this.queue.getPosition(executionId);
@@ -99,6 +101,8 @@ export class Orchestrator {
       executionMode: input.executionMode ?? 'NLP',
       trafficTaggingEnabled: input.trafficTaggingEnabled ?? config.OBSERVABILITY_ENABLED,
       kafkaConfig: input.kafkaConfig,
+      loginMethod: input.loginMethod,
+      targetUrl: input.targetUrl,
     });
 
     // 4. 推送 queued

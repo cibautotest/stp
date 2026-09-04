@@ -69,6 +69,7 @@ public class SecurityConfig {
                 .antMatchers("/api/platform/callback/**").permitAll()
                 .antMatchers("/api/platform/internal/reports/**").permitAll()
                 .antMatchers("/api/platform/internal/caches/**").permitAll()
+                .antMatchers("/api/platform/login-methods/*/cache-status").permitAll()
                 .antMatchers(
                     "/doc.html",
                     "/favicon.ico",

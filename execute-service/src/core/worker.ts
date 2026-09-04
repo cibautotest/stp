@@ -32,6 +32,8 @@ export class Worker {
       executionMode,
       trafficTaggingEnabled,
       kafkaConfig,
+      loginMethod,
+      targetUrl,
     } = task;
 
     const isHeadless = headless ?? getConfig().BROWSER_HEADLESS;
@@ -54,8 +56,8 @@ export class Worker {
       executionProducer = await ApiExchangeProducer.create(this.kafkaConfigForExecution(kafkaConfig, executionId));
       const result = await this.withTimeout(
         executionMode === 'YAML'
-          ? this.runner.run(executionId, caseId, yamlScript, isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled)
-          : this.runner.runNlp(executionId, caseId, nlp, isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled),
+          ? this.runner.run(executionId, caseId, yamlScript, isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled, loginMethod)
+          : this.runner.runNlp(executionId, caseId, nlp, isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled, loginMethod, targetUrl),
         timeout,
       );
       await executionProducer?.stop();

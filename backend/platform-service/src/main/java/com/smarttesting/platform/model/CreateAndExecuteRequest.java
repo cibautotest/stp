@@ -25,6 +25,10 @@ public class CreateAndExecuteRequest {
     @Schema(description = "Case directory ID under the project", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 64)
     private String directoryId;
 
+    @Size(max = 64, message = "loginMethodId length must be at most 64")
+    @Schema(description = "Reusable login method ID (empty means no login)", maxLength = 64)
+    private String loginMethodId;
+
     @NotBlank(message = "name is required")
     @Size(max = 100, message = "name length must be at most 100")
     @Schema(description = "Case name", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)

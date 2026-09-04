@@ -1,6 +1,7 @@
 package com.smarttesting.platform.service;
 
 import com.smarttesting.platform.entity.ExecutionRecord;
+import com.smarttesting.platform.entity.LoginMethod;
 import com.smarttesting.platform.entity.TestCase;
 import com.smarttesting.platform.mapper.ExecutionRecordMapper;
 import com.smarttesting.platform.model.CreateAndExecuteRequest;
@@ -38,6 +39,9 @@ public class CreateAndExecuteService {
     @Resource
     private ProjectExecutionSettingsService projectExecutionSettingsService;
 
+    @Resource
+    private LoginMethodService loginMethodService;
+
     /**
      * 创建用例并触发异步执行
      *
@@ -49,6 +53,7 @@ public class CreateAndExecuteService {
         TestCase testCase = new TestCase();
         testCase.setProjectId(request.getProjectId());
         testCase.setDirectoryId(request.getDirectoryId());
+        testCase.setLoginMethodId(request.getLoginMethodId());
         testCase.setName(request.getName() != null ? request.getName() : extractName(request.getNlp()));
         testCase.setDescription(request.getDescription());
         testCase.setNlp(request.getNlp());
@@ -77,6 +82,23 @@ public class CreateAndExecuteService {
         executeRequest.setYamlScript(yamlScript);
         executeRequest.setExecutionMode(mode);
         projectExecutionSettingsService.apply(request.getProjectId(), executeRequest);
+
+        // 登录方式：非免登录时注入登录负载（存量用例无 loginMethodId 时按免登录兼容）
+        if (request.getLoginMethodId() != null && !request.getLoginMethodId().isBlank()) {
+            LoginMethod lm = loginMethodService.getById(request.getLoginMethodId());
+            if (lm != null && !"none".equals(lm.getType())) {
+                ExecuteRequest.LoginMethodPayload payload = new ExecuteRequest.LoginMethodPayload();
+                payload.setId(lm.getId());
+                payload.setType(lm.getType());
+                payload.setLoginUrl(lm.getLoginUrl());
+                payload.setUsername(lm.getUsername());
+                payload.setPassword(lm.getPassword());
+                payload.setStepsNlp(lm.getStepsNlp());
+                payload.setYamlScript(lm.getYamlScript());
+                executeRequest.setLoginMethod(payload);
+                log.info("[CreateAndExecute] Login method injected: id={}, type={}, role={}", lm.getId(), lm.getType(), lm.getRoleName());
+            }
+        }
 
         String executionId = null;
         String execError = null;

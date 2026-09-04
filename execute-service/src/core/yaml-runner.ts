@@ -2,7 +2,7 @@ import yaml from 'js-yaml';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import 'dotenv/config';
 import { PlaywrightAgent } from '@midscene/web/playwright';
-import type { YamlDoc } from '../models/test-case.js';
+import type { YamlDoc, LoginMethodPayload } from '../models/test-case.js';
 import type { ExecutionResult } from '../models/execution.js';
 import type { ProgressBus } from '../progress/bus.js';
 import type { CancelManager } from './cancel-manager.js';
@@ -31,6 +31,8 @@ export class YamlRunner {
     cancelManager: CancelManager,
     cacheContent?: string,
     reportFileName?: string, producer?: ApiExchangeProducer, trafficTaggingEnabled = false,
+    loginMethod?: LoginMethodPayload,
+    targetUrl?: string,
   ): Promise<ExecutionResult> {
     const cacheDir = path.resolve('midscene_run/cache');
     await fs.mkdir(cacheDir, { recursive: true });
@@ -38,6 +40,20 @@ export class YamlRunner {
     const browser = await chromium.launch({ headless, channel: 'chrome', args: ['--ignore-certificate-errors'] });
     const context = await browser.newContext({ ignoreHTTPSErrors: true }); const observer = this.createNetworkObserver(executionId, caseId, producer, trafficTaggingEnabled);
     await observer?.install(context); const page = await context.newPage();
+
+    // 登录阶段：非免登录方式时先执行登录（独立缓存 ID，浏览器不中断）
+    if (loginMethod && loginMethod.type && loginMethod.type !== 'none') {
+      progressBus.emit(executionId, { type: 'step_progress', subTask: '正在执行登录阶段...' });
+      await this.runLoginStage(page, executionId, loginMethod);
+    }
+
+    // NLP 模式目标页面导航：NLP 本身不含网址时，先打开目标页（登录后跳转到业务地址；
+    // 若目标地址即登录页则跳过，避免跳回登录页）
+    if (targetUrl && !(loginMethod?.loginUrl && this.urlsEqual(targetUrl, loginMethod.loginUrl))) {
+      progressBus.emit(executionId, { type: 'step_progress', subTask: `正在打开 ${targetUrl}` });
+      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    }
+
     const agent = new PlaywrightAgent(page, { generateReport: true, reportFileName: reportFileName || executionId, cache: { id: caseId } });
     try {
       if (cancelManager.isCancelled(executionId)) return this.cancelledResult(executionId);
@@ -61,6 +77,7 @@ export class YamlRunner {
     cancelManager: CancelManager,
     cacheContent?: string,
     reportFileName?: string, producer?: ApiExchangeProducer, trafficTaggingEnabled = false,
+    loginMethod?: LoginMethodPayload,
   ): Promise<ExecutionResult> {
     const cacheDir = path.resolve('midscene_run/cache');
     await fs.mkdir(cacheDir, { recursive: true });
@@ -89,6 +106,15 @@ export class YamlRunner {
 
     const page = await context.newPage();
 
+    // 登录阶段：非免登录方式时先执行登录（独立缓存 ID，浏览器不中断）
+    if (loginMethod && loginMethod.type && loginMethod.type !== 'none') {
+      progressBus.emit(executionId, {
+        type: 'step_progress',
+        subTask: '正在执行登录阶段...',
+      });
+      await this.runLoginStage(page, executionId, loginMethod);
+    }
+
     // 3. 从 YAML agent 段提取 Agent 初始化配置
     const agentConfig = rawDoc.agent ?? {};
     const agentOpts: any = {
@@ -113,16 +139,25 @@ export class YamlRunner {
         return this.cancelledResult(executionId);
       }
 
-      // 5. 导航到目标 URL
-      progressBus.emit(executionId, {
-        type: 'step_progress',
-        subTask: `正在打开 ${rawDoc.web?.url}`,
-      });
+      // 5. 导航到目标 URL（登录阶段已完成且目标 URL 即登录页时跳过，避免跳回登录页导致业务步骤失败）
+      const skipGoto =
+        !!loginMethod?.loginUrl &&
+        !!rawDoc.web?.url &&
+        this.urlsEqual(rawDoc.web.url, loginMethod.loginUrl);
 
-      await page.goto(rawDoc.web!.url, {
-        waitUntil: 'domcontentloaded',
-        timeout: 30000,
-      });
+      if (skipGoto) {
+        logger.info({ executionId, url: rawDoc.web!.url }, '目标 URL 即登录页，登录阶段后跳过重复导航');
+      } else {
+        progressBus.emit(executionId, {
+          type: 'step_progress',
+          subTask: `正在打开 ${rawDoc.web?.url}`,
+        });
+
+        await page.goto(rawDoc.web!.url, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30000,
+        });
+      }
 
       // 6. 等待网络空闲（如果 YAML 中配置了）
       if (rawDoc.web?.waitForNetworkIdle) {
@@ -170,6 +205,102 @@ export class YamlRunner {
       await agent.destroy().catch(() => {});
       await browser.close().catch(() => {});
       cancelManager.remove(executionId);
+    }
+  }
+
+  /**
+   * URL 规范化比较：忽略协议差异、末尾斜杠与 hash
+   */
+  private urlsEqual(a: string, b: string): boolean {
+    const normalize = (u: string) =>
+      u.trim().replace(/^https?:\/\//i, '').replace(/#.*$/, '').replace(/\/+$/, '').toLowerCase();
+    return normalize(a) === normalize(b);
+  }
+
+  /**
+   * 登录阶段：以独立缓存 ID 执行登录 YAML（首次 AI 生成缓存，后续命中），
+   * 执行完成后浏览器保持打开，供后续业务步骤继续使用。
+   */
+  private async runLoginStage(
+    page: Page,
+    executionId: string,
+    lm: LoginMethodPayload,
+  ): Promise<void> {
+    const loginCacheId = `login_${lm.id}`;
+    logger.info({ executionId, loginMethodId: lm.id, type: lm.type, cacheId: loginCacheId }, '开始登录阶段');
+
+    const loginAgent = new PlaywrightAgent(page, {
+      generateReport: false,
+      cache: { id: loginCacheId },
+    });
+
+    try {
+      if (lm.loginUrl) {
+        await page.goto(lm.loginUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      }
+      const loginYaml = this.buildLoginYaml(lm);
+      await loginAgent.runYaml(loginYaml);
+      logger.info({ executionId, loginMethodId: lm.id, cacheId: loginCacheId }, '登录阶段执行成功');
+      // 回调平台更新缓存状态（异步，不阻塞主流程）
+      this.reportLoginCacheStatus(lm.id, 'cached').catch(() => {});
+    } catch (err) {
+      logger.error({ executionId, loginMethodId: lm.id, err }, '登录阶段执行失败');
+      throw new Error(`登录阶段执行失败: ${(err as Error).message}`);
+    } finally {
+      await loginAgent.destroy().catch(() => {});
+    }
+  }
+
+  /**
+   * 构建登录 YAML：优先使用预生成的 yamlScript；
+   * 否则按 账号/密码/补充步骤 模板拼接。
+   * 补充步骤中以 [动态] 开头的行 → 该步骤标记 cacheable: false（验证码等动态内容不缓存）。
+   */
+  private buildLoginYaml(lm: LoginMethodPayload): string {
+    if (lm.yamlScript && lm.yamlScript.trim()) {
+      const doc = yaml.load(lm.yamlScript) as any;
+      if (doc?.tasks) return yaml.dump({ tasks: doc.tasks });
+      return lm.yamlScript;
+    }
+
+    const esc = (s?: string) => (s ?? '').replace(/'/g, "''");
+    const lines: string[] = ['tasks:', '  - name: 登录', '    flow:'];
+    lines.push(`      - aiInput: '${esc(lm.username)}'`);
+    lines.push('        locate: 账号或用户名输入框');
+    lines.push(`      - aiInput: '${esc(lm.password)}'`);
+    lines.push('        locate: 密码输入框');
+
+    if (lm.stepsNlp) {
+      for (const raw of lm.stepsNlp.split('\n')) {
+        const s = raw.trim();
+        if (!s) continue;
+        const dynamic = s.startsWith('[动态]');
+        const text = dynamic ? s.slice(4).trim() : s;
+        lines.push(`      - aiAct: '${esc(text)}'`);
+        if (dynamic) lines.push('        cacheable: false');
+      }
+    }
+
+    lines.push("      - aiAct: '点击登录按钮，完成登录'");
+    // 等待登录跳转完成，避免业务步骤在页面加载中执行（查询类步骤永不缓存，不影响登录缓存复用）
+    lines.push("      - aiWaitFor: '登录已完成，页面已进入登录后的主界面'");
+    return lines.join('\n');
+  }
+
+  /**
+   * 回调平台更新登录方式的缓存状态
+   */
+  private async reportLoginCacheStatus(loginMethodId: string, status: 'cached' | 'uncached'): Promise<void> {
+    const base = getConfig().PLATFORM_BASE_URL;
+    try {
+      await fetch(`${base}/api/platform/login-methods/${encodeURIComponent(loginMethodId)}/cache-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      logger.info({ loginMethodId, status }, '登录方式缓存状态已回调');
+    } catch (err) {
+      logger.warn({ loginMethodId, status, err }, '登录方式缓存状态回调失败（忽略）');
     }
   }
 

@@ -53,6 +53,7 @@ export const useCaseStore = defineStore('cases', () => {
   const addCase = async (data: {
     projectId: string
     directoryId: string
+    loginMethodId?: string
     name: string
     description?: string
     nlp: string
@@ -103,7 +104,7 @@ export const useCaseStore = defineStore('cases', () => {
 
   // 异步执行用例：创建 → 轮询状态 → 回调更新后端
   const runCaseAsync = async (
-    data: { projectId: string; directoryId: string; name: string; description?: string; nlp: string; customYaml?: string; headless?: boolean; executionMode?: ExecutionMode },
+    data: { projectId: string; directoryId: string; loginMethodId?: string; name: string; description?: string; nlp: string; customYaml?: string; headless?: boolean; executionMode?: ExecutionMode },
     onStatusUpdate?: (status: string, reportUrl?: string, queuePosition?: number, errorDetail?: string) => void
   ): Promise<{ caseId: string; executionId: string | null; success: boolean; errorType?: string; errorDetail?: string } | null> => {
     try {

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { Orchestrator } from '../../core/orchestrator.js';
-import { executeSyncSchema } from '../schemas.js';
+import { executeSyncSchema, nullsToUndefined } from '../schemas.js';
 import { AppError } from '../../utils/errors.js';
 import { createLogger } from '../../utils/logger.js';
 import {
@@ -37,7 +37,7 @@ export async function syncRoutes(server: FastifyInstance, orchestrator: Orchestr
 
     log.info({ id: parsed.data.id, name: parsed.data.name }, '同步执行请求开始');
     try {
-      const result = await orchestrator.executeSync(parsed.data);
+      const result = await orchestrator.executeSync(nullsToUndefined(parsed.data));
       log.info({ id: parsed.data.id, executionId: result.executionId }, '同步执行完成');
       return reply.send(result);
     } catch (err) {

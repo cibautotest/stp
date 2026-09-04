@@ -38,11 +38,12 @@ export const executeSyncBodySchema = {
   properties: {
     id: { type: 'string', minLength: 1, description: '用例唯一标识' },
     name: { type: 'string', minLength: 1, description: '用例名称' },
-    yamlScript: { type: 'string', description: 'optional YAML script' },
+    yamlScript: { type: 'string', nullable: true, description: 'optional YAML script' },
     nlp: { type: 'string', minLength: 1, description: 'natural language instruction' },
-    trafficTaggingEnabled: { type: 'boolean', description: 'whether to inject traffic tagging headers' },
+    trafficTaggingEnabled: { type: 'boolean', nullable: true, description: 'whether to inject traffic tagging headers' },
     kafkaConfig: {
       type: 'object',
+      nullable: true,
       description: 'Kafka config supplied by platform project settings',
       properties: {
         enabled: { type: 'boolean' },
@@ -55,8 +56,26 @@ export const executeSyncBodySchema = {
       additionalProperties: false,
     },
     executionMode: { type: 'string', enum: ['NLP', 'YAML'], description: 'execution mode' },
-    timeout: { type: 'integer', minimum: 1, description: '超时时间(ms)，默认 60000' },
-    headless: { type: 'boolean', description: '是否无头模式，默认 true' },
+    timeout: { type: 'integer', minimum: 1, nullable: true, description: '超时时间(ms)，默认 60000' },
+    headless: { type: 'boolean', nullable: true, description: '是否无头模式，默认 true' },
+    cacheContent: { type: 'string', nullable: true, description: 'Midscene UI cache content supplied by platform' },
+    targetUrl: { type: 'string', nullable: true, description: 'NLP 模式目标页面 URL（执行步骤前先导航）' },
+    loginMethod: {
+      type: 'object',
+      nullable: true,
+      description: '登录方式负载（type != none 时先执行登录阶段，独立缓存）',
+      properties: {
+        id: { type: 'string', minLength: 1, description: '登录方式 ID（缓存 ID 后缀）' },
+        type: { type: 'string', enum: ['none', 'cas', 'local'], description: '登录类型' },
+        loginUrl: { type: 'string', description: '登录页地址' },
+        username: { type: 'string', description: '账号' },
+        password: { type: 'string', description: '密码' },
+        stepsNlp: { type: 'string', description: '登录补充步骤 NLP' },
+        yamlScript: { type: 'string', description: '预生成的登录 YAML' },
+      },
+      required: ['id', 'type'],
+      additionalProperties: false,
+    },
   },
   additionalProperties: false,
 };

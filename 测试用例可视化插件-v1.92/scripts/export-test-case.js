@@ -457,8 +457,11 @@
         if (newGroup) newGroup.style.display = 'none';
         if (newInput) newInput.value = '';
       }
-      // 项目切换 → 刷新目录下拉 + 按目标项目重新标注已生成步骤
+      // 项目切换 → 刷新目录下拉 + 登录方式 + 按目标项目重新标注已生成步骤
       loadDirectoryDropdown(selectEl.value === '__CREATE_NEW__' ? '' : selectEl.value);
+      loadLoginMethods(selectEl.value === '__CREATE_NEW__' ? '' : selectEl.value).then(function () {
+        onLoginTypeChange();
+      });
       renderStepsFromLog();
     };
 
@@ -468,6 +471,10 @@
 
     // 弹窗打开时主动初始化目录下拉（程序赋值 select.value 不会触发 onchange）
     loadDirectoryDropdown(selectEl.value === '__CREATE_NEW__' ? '' : selectEl.value);
+    // 同步加载登录方式并初始化登录区块
+    loadLoginMethods(selectEl.value === '__CREATE_NEW__' ? '' : selectEl.value).then(function () {
+      initLoginTypeBlock();
+    });
   }
 
   // ─── 目录下拉（加载 / 创建 / 记忆） ────────────────────────
@@ -549,6 +556,265 @@
 
     if (!val) return { ok: false, error: '请选择项目目录' };
     return { ok: true, directoryId: val };
+  }
+
+  // ─── 登录方式（类型单选 + 角色下拉 + 缓存标记 + 新建） ─────
+  var _loginMethods = [];
+  var DYNAMIC_VALUE_OPTIONS = ['图形验证码', '短信验证码', '滑块验证', '邮件验证码', '自定义'];
+
+  // 补充步骤动态行
+  function addExtraStepRow() {
+    var container = document.getElementById('midscene-extra-steps-container');
+    if (!container) return;
+    var row = document.createElement('div');
+    row.className = 'midscene-extra-step';
+
+    var typeRow = document.createElement('div');
+    typeRow.className = 'midscene-login-field-row';
+    var typeLabel = document.createElement('span');
+    typeLabel.className = 'midscene-login-field-label';
+    typeLabel.textContent = '动态值类型';
+    var typeSelect = document.createElement('select');
+    typeSelect.className = 'midscene-new-login-input midscene-extra-type';
+    var placeholder = document.createElement('option');
+    placeholder.value = ''; placeholder.textContent = '— 请选择动态值 —';
+    typeSelect.appendChild(placeholder);
+    DYNAMIC_VALUE_OPTIONS.forEach(function (opt) {
+      var o = document.createElement('option');
+      o.value = opt; o.textContent = opt;
+      typeSelect.appendChild(o);
+    });
+    typeRow.appendChild(typeLabel);
+    typeRow.appendChild(typeSelect);
+    row.appendChild(typeRow);
+
+    var customRow = document.createElement('div');
+    customRow.className = 'midscene-login-field-row midscene-extra-custom-row';
+    customRow.style.display = 'none';
+    var customLabel = document.createElement('span');
+    customLabel.className = 'midscene-login-field-label';
+    customLabel.textContent = '自定义名称';
+    var customInput = document.createElement('input');
+    customInput.type = 'text';
+    customInput.className = 'midscene-new-login-input midscene-extra-custom';
+    customInput.placeholder = '请输入动态值名称';
+    customRow.appendChild(customLabel);
+    customRow.appendChild(customInput);
+    row.appendChild(customRow);
+
+    typeSelect.onchange = function () {
+      customRow.style.display = (typeSelect.value === '自定义') ? 'flex' : 'none';
+    };
+
+    var descRow = document.createElement('div');
+    descRow.className = 'midscene-login-field-row';
+    var descLabel = document.createElement('span');
+    descLabel.className = 'midscene-login-field-label';
+    descLabel.textContent = '补充步骤';
+    var descInput = document.createElement('input');
+    descInput.type = 'text';
+    descInput.className = 'midscene-new-login-input midscene-extra-desc';
+    descInput.placeholder = '处理步骤，如：识别图形验证码并填入';
+    var removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'midscene-extra-step-remove';
+    removeBtn.textContent = '删除';
+    removeBtn.onclick = function () { container.removeChild(row); };
+    descRow.appendChild(descLabel);
+    descRow.appendChild(descInput);
+    descRow.appendChild(removeBtn);
+    row.appendChild(descRow);
+
+    container.appendChild(row);
+  }
+
+  // 确认保存新建登录账号（账号即角色名，点击即落库并自动选中）
+  async function saveNewLoginMethod(projectId, type) {
+    var loginUrl = document.getElementById('midscene-new-login-url').value.trim();
+    var username = document.getElementById('midscene-new-login-username').value.trim();
+    var password = document.getElementById('midscene-new-login-password').value;
+    var stepsResult = collectExtraSteps();
+    if (!stepsResult.ok) return { ok: false, error: stepsResult.error };
+    if (!loginUrl) return { ok: false, error: '请输入登录网址' };
+    if (!username || !password) return { ok: false, error: '请输入账号和密码' };
+    var result = await MidsceneAuth.createLoginMethod(_authToken, {
+      projectId: projectId, type: type,
+      name: type + '登录-' + username,
+      roleName: username, loginUrl: loginUrl,
+      username: username, password: password,
+      stepsNlp: stepsResult.stepsNlp || undefined
+    });
+    if (!result.success) return { ok: false, error: result.error || '创建登录方式失败' };
+    await loadLoginMethods(projectId);
+    renderLoginRoleSelect(type);
+    var selectEl = document.getElementById('midscene-login-role-select');
+    if (selectEl) selectEl.value = result.method.id;
+    onLoginRoleChange();
+    localStorage.setItem('midscene_lastLoginRole_' + projectId + '_' + type, result.method.id);
+    // 清空表单
+    document.getElementById('midscene-new-login-url').value = '';
+    document.getElementById('midscene-new-login-username').value = '';
+    document.getElementById('midscene-new-login-password').value = '';
+    var container = document.getElementById('midscene-extra-steps-container');
+    if (container) container.innerHTML = '';
+    return { ok: true, id: result.method.id };
+  }
+
+  // 收集补充步骤 → stepsNlp 存储文本（[动态] 前缀）
+  function collectExtraSteps() {
+    var container = document.getElementById('midscene-extra-steps-container');
+    if (!container) return { ok: true, stepsNlp: '' };
+    var rows = container.querySelectorAll('.midscene-extra-step');
+    var lines = [];
+    for (var i = 0; i < rows.length; i++) {
+      var type = rows[i].querySelector('.midscene-extra-type').value;
+      var custom = rows[i].querySelector('.midscene-extra-custom').value.trim();
+      var desc = rows[i].querySelector('.midscene-extra-desc').value.trim();
+      if (!type) return { ok: false, error: '请选择补充步骤的动态值类型' };
+      if (type === '自定义' && !custom) return { ok: false, error: '请输入自定义动态值名称' };
+      if (!desc) return { ok: false, error: '请填写补充步骤内容' };
+      lines.push('[动态] ' + desc);
+    }
+    return { ok: true, stepsNlp: lines.join('\n') };
+  }
+
+  function getSelectedLoginType() {
+    var radios = document.getElementsByName('midscene-login-type');
+    for (var i = 0; i < radios.length; i++) {
+      if (radios[i].checked) return radios[i].value;
+    }
+    return '';
+  }
+
+  function setSelectedLoginType(type) {
+    var radios = document.getElementsByName('midscene-login-type');
+    for (var i = 0; i < radios.length; i++) {
+      radios[i].checked = (radios[i].value === type);
+    }
+    onLoginTypeChange();
+  }
+
+  function onLoginTypeChange() {
+    var type = getSelectedLoginType();
+    var roleGroup = document.getElementById('midscene-login-role-group');
+    var newGroup = document.getElementById('midscene-new-login-group');
+    if (type && type !== 'none') {
+      if (roleGroup) roleGroup.style.display = 'block';
+      renderLoginRoleSelect(type);
+    } else {
+      if (roleGroup) roleGroup.style.display = 'none';
+      if (newGroup) newGroup.style.display = 'none';
+    }
+  }
+
+  function renderLoginRoleSelect(type) {
+    var selectEl = document.getElementById('midscene-login-role-select');
+    if (!selectEl) return;
+    selectEl.innerHTML = '<option value="">— 请选择登录角色 —</option>';
+    var filtered = _loginMethods.filter(function (m) { return m.type === type; });
+    filtered.forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = m.id;
+      var cacheText = m.cacheStatus === 'cached' ? '（已执行过，有缓存）' : '（未缓存）';
+      opt.textContent = (m.username || m.name) + cacheText;
+      selectEl.appendChild(opt);
+    });
+    var newOpt = document.createElement('option');
+    newOpt.value = '__NEW__';
+    newOpt.textContent = '➕ 新建登录账号…';
+    selectEl.appendChild(newOpt);
+
+    // 恢复上次角色
+    var projectId = getCurrentProjectId();
+    var remembered = projectId ? (localStorage.getItem('midscene_lastLoginRole_' + projectId + '_' + type) || '') : '';
+    if (remembered && filtered.some(function (m) { return m.id === remembered; })) {
+      selectEl.value = remembered;
+    }
+    onLoginRoleChange();
+  }
+
+  function onLoginRoleChange() {
+    var selectEl = document.getElementById('midscene-login-role-select');
+    var newGroup = document.getElementById('midscene-new-login-group');
+    var hint = document.getElementById('midscene-login-cache-hint');
+    if (!selectEl) return;
+    if (selectEl.value === '__NEW__') {
+      if (newGroup) newGroup.style.display = 'block';
+      if (hint) hint.style.display = 'none';
+    } else {
+      if (newGroup) newGroup.style.display = 'none';
+      var m = _loginMethods.find(function (x) { return x.id === selectEl.value; });
+      if (hint && m) {
+        hint.style.display = 'block';
+        if (m.cacheStatus === 'cached') {
+          hint.className = 'midscene-login-cache-hint cached';
+          hint.textContent = '✅ 已执行过，有缓存（登录阶段将直接命中缓存，速度更快）';
+        } else {
+          hint.className = 'midscene-login-cache-hint uncached';
+          hint.textContent = '⚠️ 未缓存（首次执行将由 AI 生成登录缓存，之后提速）';
+        }
+      } else if (hint) {
+        hint.style.display = 'none';
+      }
+    }
+  }
+
+  async function loadLoginMethods(projectId) {
+    _loginMethods = [];
+    if (!projectId) return;
+    var result = await MidsceneAuth.getLoginMethods(_authToken, projectId);
+    if (result.success) _loginMethods = result.methods || [];
+  }
+
+  function initLoginTypeBlock() {
+    setSelectedLoginType('');
+    var roleSelect = document.getElementById('midscene-login-role-select');
+    if (roleSelect) roleSelect.onchange = onLoginRoleChange;
+    var addStepBtn = document.getElementById('midscene-add-extra-step');
+    if (addStepBtn) addStepBtn.onclick = addExtraStepRow;
+    var saveBtn = document.getElementById('midscene-save-login-btn');
+    if (saveBtn) {
+      saveBtn.onclick = async function () {
+        var projectId = getCurrentProjectId();
+        var type = getSelectedLoginType();
+        if (!projectId || !type || type === 'none') return;
+        saveBtn.disabled = true;
+        saveBtn.textContent = '保存中…';
+        try {
+          var r = await saveNewLoginMethod(projectId, type);
+          if (r.ok) {
+            showStatus('登录账号已保存', 'success');
+          } else {
+            showStatus(r.error, 'error');
+          }
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.textContent = '确认保存';
+        }
+      };
+    }
+    var container = document.getElementById('midscene-extra-steps-container');
+    if (container) container.innerHTML = '';
+  }
+
+  // 确保 loginMethodId 就绪（免登录 → ''；新建角色 → 先创建；已选 → 原 id）
+  async function ensureLoginMethodId(projectId) {
+    var type = getSelectedLoginType();
+    if (!type) return { ok: false, error: '请选择登录方式' };
+    if (type === 'none') return { ok: true, loginMethodId: '' };
+
+    var selectEl = document.getElementById('midscene-login-role-select');
+    var val = selectEl ? selectEl.value : '';
+
+    if (val === '__NEW__') {
+      var saved = await saveNewLoginMethod(projectId, type);
+      if (!saved.ok) return { ok: false, error: saved.error };
+      return { ok: true, loginMethodId: saved.id };
+    }
+
+    if (!val) return { ok: false, error: '请选择登录角色，或新建登录角色' };
+    localStorage.setItem('midscene_lastLoginRole_' + projectId + '_' + type, val);
+    return { ok: true, loginMethodId: val };
   }
 
   // ─── Form persistence ──────────────────────────────────────
@@ -666,6 +932,24 @@
       } else if (dirValue === '__CREATE_NEW_DIR__') {
         var newDirName = document.getElementById('midscene-new-directory-input').value.trim();
         if (!newDirName) errors.push('请输入新目录名称');
+      }
+    }
+    // 登录方式必选
+    var loginType = getSelectedLoginType();
+    if (!loginType) {
+      errors.push('请选择登录方式');
+    } else if (loginType !== 'none') {
+      var roleSelect = document.getElementById('midscene-login-role-select');
+      var roleVal = roleSelect ? roleSelect.value : '';
+      if (!roleVal) {
+        errors.push('请选择登录账号，或新建登录账号');
+      } else if (roleVal === '__NEW__') {
+        var newUrl = document.getElementById('midscene-new-login-url').value.trim();
+        var newUser = document.getElementById('midscene-new-login-username').value.trim();
+        var newPwd = document.getElementById('midscene-new-login-password').value;
+        if (!newUrl || !newUser || !newPwd) errors.push('请完整填写新建登录账号的信息（网址/账号/密码）');
+        var stepsCheck = collectExtraSteps();
+        if (!stepsCheck.ok) errors.push(stepsCheck.error);
       }
     }
     if (!caseName) errors.push('请输入用例名称');
@@ -826,6 +1110,13 @@
       }
       var directoryId = dirResult.directoryId;
 
+      // 确保登录方式就绪（新建角色场景：先创建）
+      var loginResult = await ensureLoginMethodId(projectId);
+      if (!loginResult.ok) {
+        throw new Error(loginResult.error);
+      }
+      var loginMethodId = loginResult.loginMethodId;
+
       var resp = await fetch(platformUrl + '/api/platform/execute/create-and-execute', {
         method: 'POST',
         headers: {
@@ -835,6 +1126,7 @@
         body: JSON.stringify({
           projectId: projectId,
           directoryId: directoryId,
+          loginMethodId: loginMethodId || undefined,
           name: caseName,
           nlp: nlpText
         })

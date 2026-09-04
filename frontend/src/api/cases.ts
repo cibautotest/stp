@@ -11,10 +11,31 @@ export const getCaseDirectories = (projectId: string) => request.get<CaseDirecto
 export const createCaseDirectory = (data: { projectId: string; parentId?: string; name: string }) => request.post<CaseDirectory>('/platform/case-directories', data)
 export const deleteCaseDirectory = (id: string) => request.delete(`/platform/case-directories/${encodeURIComponent(id)}`)
 
+// ── 登录方式（按项目维度，跨用例复用） ──
+export type LoginMethodType = 'none' | 'cas' | 'local'
+export interface LoginMethod {
+  id: string
+  projectId: string
+  name: string
+  type: LoginMethodType
+  loginUrl?: string
+  roleName?: string
+  username?: string
+  password?: string
+  stepsNlp?: string
+  yamlScript?: string
+  cacheStatus?: 'uncached' | 'cached'
+}
+export const getLoginMethods = (projectId: string) => request.get<LoginMethod[]>('/platform/login-methods', { params: { projectId } })
+export const createLoginMethod = (data: Omit<LoginMethod, 'id' | 'cacheStatus'>) => request.post<LoginMethod>('/platform/login-methods', data)
+export const updateLoginMethod = (id: string, data: Partial<LoginMethod>) => request.put<LoginMethod>(`/platform/login-methods/${encodeURIComponent(id)}`, data)
+export const deleteLoginMethod = (id: string) => request.delete(`/platform/login-methods/${encodeURIComponent(id)}`)
+
 // 创建用例 - 与后端 TestCase 实体匹配
 export const createCase = (data: {
   projectId: string
   directoryId: string
+  loginMethodId?: string
   name: string
   description?: string
   nlp: string
@@ -54,6 +75,7 @@ export const getCaseCache = (id: string) => request.get<string>(`/platform/cases
 export const createAndExecute = (data: {
   projectId: string
   directoryId: string
+  loginMethodId?: string
   name: string
   description?: string
   nlp: string

@@ -742,6 +742,136 @@
       cursor: not-allowed;
     }
 
+    /* ─── Login method group ──────────────────────── */
+    .midscene-login-type-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 8px 10px;
+      border: 1px solid #e5e7eb;
+      border-radius: 4px;
+      background: #f9fafb;
+    }
+    .midscene-login-type-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: normal;
+      color: #374151;
+      cursor: pointer;
+      margin-bottom: 0;
+    }
+    .midscene-login-type-item input[type="radio"] {
+      width: 14px;
+      height: 14px;
+      accent-color: #3388FF;
+      cursor: pointer;
+    }
+    .midscene-login-cache-hint {
+      margin-top: 6px;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .midscene-login-cache-hint.cached {
+      color: #16a34a;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+    }
+    .midscene-login-cache-hint.uncached {
+      color: #d97706;
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+    }
+    .midscene-new-login-input {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 13px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      outline: none;
+      box-sizing: border-box;
+      margin-bottom: 6px;
+      font-family: inherit;
+    }
+    .midscene-new-login-input:focus {
+      border-color: #3388FF;
+      box-shadow: 0 0 0 2px rgba(51,136,255,0.15);
+    }
+    #midscene-new-login-group {
+      background: #f7f9fc;
+      border-radius: 6px;
+      padding: 10px;
+    }
+    .midscene-login-field-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    .midscene-login-field-label {
+      flex: 0 0 64px;
+      font-size: 12px;
+      color: #6b7280;
+      text-align: right;
+    }
+    .midscene-login-field-row .midscene-new-login-input {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .midscene-extra-step {
+      padding: 8px;
+      background: #fff;
+      border: 1px dashed #d1d5db;
+      border-radius: 6px;
+      margin-bottom: 6px;
+    }
+    .midscene-extra-step .midscene-login-field-row:last-child {
+      margin-bottom: 0;
+    }
+    .midscene-extra-step-remove {
+      flex: 0 0 auto;
+      background: none;
+      border: none;
+      color: #dc2626;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+    .midscene-add-extra-step-btn {
+      background: none;
+      border: none;
+      color: #3388FF;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+    .midscene-add-extra-step-btn:hover { text-decoration: underline; }
+    .midscene-extra-step select.midscene-new-login-input {
+      padding: 6px 10px;
+    }
+    .midscene-login-save-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .midscene-save-login-btn {
+      background: #3388FF;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .midscene-save-login-btn:hover { background: #2277ee; }
+    .midscene-login-save-hint {
+      font-size: 12px;
+      color: #9ca3af;
+    }
+
     /* ─── Select form-group styling ───────────────── */
     .midscene-form-group select {
       width: 100%;
@@ -955,6 +1085,33 @@
         <div class="midscene-form-group" id="midscene-new-directory-group" style="display:none;">
           <label for="midscene-new-directory-input">新建目录名称</label>
           <input type="text" id="midscene-new-directory-input" placeholder="请输入新目录名称">
+        </div>
+        <div class="midscene-form-group">
+          <label>登录方式 <span style="color:#dc2626;">*</span></label>
+          <div class="midscene-login-type-group">
+            <label class="midscene-login-type-item"><input type="radio" name="midscene-login-type" value="none"> 不用输入账号密码</label>
+            <label class="midscene-login-type-item"><input type="radio" name="midscene-login-type" value="cas"> CAS 登录</label>
+            <label class="midscene-login-type-item"><input type="radio" name="midscene-login-type" value="local"> 本地登录</label>
+          </div>
+        </div>
+        <div class="midscene-form-group" id="midscene-login-role-group" style="display:none;">
+          <label for="midscene-login-role-select">登录角色 <span style="color:#dc2626;">*</span></label>
+          <select id="midscene-login-role-select">
+            <option value="">— 请选择登录角色 —</option>
+          </select>
+          <div id="midscene-login-cache-hint" class="midscene-login-cache-hint" style="display:none;"></div>
+        </div>
+        <div class="midscene-form-group" id="midscene-new-login-group" style="display:none;">
+          <label>新建登录账号</label>
+          <div class="midscene-login-field-row"><span class="midscene-login-field-label">登录网址</span><input type="text" id="midscene-new-login-url" placeholder="例如：https://sso.example.com/login" class="midscene-new-login-input"></div>
+          <div class="midscene-login-field-row"><span class="midscene-login-field-label">账号</span><input type="text" id="midscene-new-login-username" placeholder="登录账号" class="midscene-new-login-input"></div>
+          <div class="midscene-login-field-row"><span class="midscene-login-field-label">密码</span><input type="password" id="midscene-new-login-password" placeholder="登录密码" class="midscene-new-login-input"></div>
+          <div id="midscene-extra-steps-container"></div>
+          <button type="button" id="midscene-add-extra-step" class="midscene-add-extra-step-btn">➕ 新增补充步骤</button>
+          <div class="midscene-login-save-row">
+            <button type="button" id="midscene-save-login-btn" class="midscene-save-login-btn">确认保存</button>
+            <span class="midscene-login-save-hint">角色名默认为账号</span>
+          </div>
         </div>
         <div class="midscene-form-group">
           <label for="midscene-case-name">用例名称 <span style="color:#dc2626;">*</span></label>

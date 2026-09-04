@@ -59,6 +59,48 @@ public class ExecuteRequest {
     @Schema(description = "Kafka API exchange observation config")
     private KafkaConfig kafkaConfig;
 
+    @Valid
+    @Schema(description = "Reusable login method payload (null means no login)")
+    private LoginMethodPayload loginMethod;
+
+    @Size(max = 1000, message = "targetUrl length must be at most 1000")
+    @Schema(description = "Target page URL for NLP mode (navigate before executing steps)", maxLength = 1000)
+    private String targetUrl;
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Schema(description = "Login method payload for pre-login stage")
+    public static class LoginMethodPayload {
+        @Size(max = 64, message = "id length must be at most 64")
+        @Schema(description = "Login method ID (used as cache id suffix)", maxLength = 64)
+        private String id;
+
+        @Size(max = 16, message = "type length must be at most 16")
+        @Schema(description = "Login type: none / cas / local", maxLength = 16)
+        private String type;
+
+        @Size(max = 512, message = "loginUrl length must be at most 512")
+        @Schema(description = "Login page URL", maxLength = 512)
+        private String loginUrl;
+
+        @Size(max = 128, message = "username length must be at most 128")
+        @Schema(description = "Account username", maxLength = 128)
+        private String username;
+
+        @Size(max = 256, message = "password length must be at most 256")
+        @Schema(description = "Account password", maxLength = 256)
+        private String password;
+
+        @Size(max = 20000, message = "stepsNlp length must be at most 20000")
+        @Schema(description = "Extra login steps in natural language", maxLength = 20000)
+        private String stepsNlp;
+
+        @Size(max = 200000, message = "yamlScript length must be at most 200000")
+        @Schema(description = "Pre-generated login YAML script", maxLength = 200000)
+        private String yamlScript;
+    }
+
     @Data
     @NoArgsConstructor
     @AllArgsConstructor

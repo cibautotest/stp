@@ -1,6 +1,6 @@
 // ── 队列任务 ──
 
-import type { KafkaConfig } from '../models/test-case.js';
+import type { KafkaConfig, LoginMethodPayload } from '../models/test-case.js';
 
 export interface QueueTask {
   executionId: string;
@@ -15,6 +15,8 @@ export interface QueueTask {
   executionMode?: 'NLP' | 'YAML';
   trafficTaggingEnabled?: boolean;
   kafkaConfig?: KafkaConfig;
+  loginMethod?: LoginMethodPayload;
+  targetUrl?: string;
 }
 
 // ── 队列接口 ──

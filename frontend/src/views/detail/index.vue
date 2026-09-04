@@ -42,6 +42,18 @@
               </div>
             </div>
             <div class="info-item"><span class="info-label">所属项目</span><el-tag size="small">{{ (detail as any).project || '默认项目' }}</el-tag></div>
+            <div class="info-item">
+              <span class="info-label">登录方式</span>
+              <span class="info-value">
+                <template v-if="currentLoginMethod">
+                  {{ currentLoginMethod.type === 'cas' ? 'CAS 登录' : '本地登录' }}（{{ currentLoginMethod.username }}）
+                  <el-tag size="small" :type="currentLoginMethod.cacheStatus === 'cached' ? 'success' : 'warning'" style="margin-left:6px">
+                    {{ currentLoginMethod.cacheStatus === 'cached' ? '已缓存' : '未缓存' }}
+                  </el-tag>
+                </template>
+                <el-tag v-else size="small" type="info">免登录</el-tag>
+              </span>
+            </div>
             <div class="info-item"><span class="info-label">执行状态</span><el-tag :type="getStatusType((detail as any).status)" size="small">{{ getStatusName((detail as any).status) }}</el-tag></div>
             <div v-if="(detail as any).description" class="info-item"><span class="info-label">用例描述</span><span class="info-value">{{ (detail as any).description }}</span></div>
             <div class="info-item"><span class="info-label">创建时间</span><span class="info-value">{{ formatDateTime((detail as any).createdAt) }}</span></div>
@@ -77,7 +89,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { InfoFilled, ChatLineSquare, Tickets, Edit, Document, VideoPlay } from '@element-plus/icons-vue'
@@ -85,6 +97,7 @@ import { YamlEditor } from '@/components/yaml'
 import { AiScriptGeneratorDialog } from '@/components/common'
 import { useCaseStore, useConfigStore } from '@/stores'
 import { getCase, getCaseCache, updateCase, streamNlpToYaml } from '@/api'
+import { getLoginMethods, type LoginMethod } from '@/api/cases'
 import { formatDate } from '@/utils'
 import type { YamlConfig } from '@/types'
 
@@ -154,12 +167,47 @@ const cleanNlp = (nlp: string): string => {
   return nlp.replace(/\s*\|\s*YAML已更新[：:].*$/g, '').trim()
 }
 
+// ── 登录方式（用于生成脚本时拼登录 NLP） ──
+const loginMethods = ref<LoginMethod[]>([])
+const currentLoginMethod = computed<LoginMethod | undefined>(() =>
+  loginMethods.value.find(m => m.id === (detail.value as any)?.loginMethodId)
+)
+
+// 策略生成登录 NLP：打开url，输入登录名xxx，密码xxx，补充步骤xxxx
+const buildLoginNlp = (m?: LoginMethod): string => {
+  if (!m || !m.loginUrl) return ''
+  let nlp = `打开 ${m.loginUrl}，输入登录名 ${m.username}，密码 ${m.password}`
+  if (m.stepsNlp) {
+    const extra = m.stepsNlp.split('\n').map(s => s.replace(/^\[动态\]\s*/, '').trim()).filter(Boolean)
+    if (extra.length > 0) nlp += '，' + extra.join('，')
+  }
+  return nlp
+}
+
+// 合并登录 NLP（幂等：已含登录前缀时不重复拼）
+const mergeLoginNlp = (businessNlp: string): string => {
+  const nlp = businessNlp.trim()
+  const loginNlp = buildLoginNlp(currentLoginMethod.value)
+  if (!loginNlp) return nlp
+  return nlp.startsWith(loginNlp) ? nlp : `${loginNlp}\n${nlp}`
+}
+
+// 从合并 NLP 中剥离登录前缀（回写用例时保持业务步骤纯度，避免执行时重复登录）
+const stripLoginNlp = (mergedNlp: string): string => {
+  const nlp = mergedNlp.trim()
+  const loginNlp = buildLoginNlp(currentLoginMethod.value)
+  if (loginNlp && nlp.startsWith(loginNlp)) return nlp.slice(loginNlp.length).trim()
+  return nlp
+}
+
 const generateScript = async (nlp = generatorNlp.value) => {
   if (!nlp.trim()) { ElMessage.warning('请输入NLP测试指令'); return }
-  generatorNlp.value = nlp
+  // 合并登录 NLP 并回显到对话框（可见可编辑）
+  const merged = mergeLoginNlp(nlp)
+  generatorNlp.value = merged
   generatingScript.value = true
   streamedScript.value = ''; streamedReasoning.value = ''; streamDialog.value = true
-  try { const yaml = await streamNlpToYaml(nlp.trim(), chunk => { streamedScript.value += chunk }, reasoning => { streamedReasoning.value += reasoning }); streamedScript.value = yaml } catch (e: any) { ElMessage.error(e.message || '脚本生成失败') } finally { generatingScript.value = false }
+  try { const yaml = await streamNlpToYaml(merged.trim(), chunk => { streamedScript.value += chunk }, reasoning => { streamedReasoning.value += reasoning }); streamedScript.value = yaml } catch (e: any) { ElMessage.error(e.message || '脚本生成失败') } finally { generatingScript.value = false }
 }
 
 const openGenerateScript = () => {
@@ -168,7 +216,8 @@ const openGenerateScript = () => {
 }
 
 const confirmGeneratedScript = async ({ nlp, yaml }: { nlp: string; yaml: string }) => {
-  nlpText.value = nlp.trim()
+  // 回写业务步骤（剥离登录前缀；登录由用例绑定的登录方式负责）
+  nlpText.value = stripLoginNlp(nlp)
   yamlContent.value = yaml
   yamlEditorRef.value?.loadFromYaml(yaml)
   try {
@@ -187,6 +236,10 @@ const fetchCaseDetail = async () => {
     detail.value = res || {}
     executionMode.value = (res as any)?.executionMode === 'YAML' ? 'YAML' : 'NLP'
     nlpText.value = cleanNlp((res as any)?.nlp || '')
+    // 加载登录方式（生成脚本拼登录 NLP + 基本信息展示）
+    if ((res as any)?.projectId) {
+      try { loginMethods.value = await getLoginMethods((res as any).projectId) } catch { loginMethods.value = [] }
+    }
 
     // 加载 YAML：优先 yamlFlow → 从 script 提取 → NLP 转换
     const yamlFlow = (res as any)?.yamlFlow || ''

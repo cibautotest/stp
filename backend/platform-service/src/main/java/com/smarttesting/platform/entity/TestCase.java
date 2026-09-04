@@ -33,6 +33,10 @@ public class TestCase {
     @Schema(description = "Directory ID", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 64)
     private String directoryId;
 
+    @Size(max = 64, message = "loginMethodId length must be at most 64")
+    @Schema(description = "Reusable login method ID (empty means no login)", maxLength = 64)
+    private String loginMethodId;
+
     @NotBlank(message = "name is required")
     @Size(max = 100, message = "name length must be at most 100")
     @Schema(description = "Case name", example = "Baidu search test", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)

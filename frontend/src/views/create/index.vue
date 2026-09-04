@@ -15,6 +15,72 @@
             </el-select>
           </div>
 
+          <!-- 登录方式（必选） -->
+          <div class="form-item">
+            <label class="form-label">登录方式 <span class="required">*</span></label>
+            <el-radio-group v-model="loginType">
+              <el-radio label="none">不用输入账号密码</el-radio>
+              <el-radio label="cas">CAS 登录</el-radio>
+              <el-radio label="local">本地登录</el-radio>
+            </el-radio-group>
+          </div>
+
+          <!-- 免登录：仅需网址 -->
+          <div v-if="loginType === 'none'" class="form-item">
+            <label class="form-label">目标网址 <span class="required">*</span></label>
+            <el-input v-model="noneUrl" placeholder="例如：https://www.example.com" />
+          </div>
+
+          <div v-if="loginType && loginType !== 'none'" class="form-item login-role-item">
+            <el-select v-model="selectedLoginMethodId" placeholder="请选择登录账号" class="project-select" :disabled="!currentProjectId">
+              <el-option v-for="m in filteredLoginMethods" :key="m.id" :value="m.id" :label="m.username || m.name">
+                <span>{{ m.username || m.name }}</span>
+                <span class="cache-tag" :class="m.cacheStatus === 'cached' ? 'is-cached' : 'is-uncached'">
+                  {{ m.cacheStatus === 'cached' ? '已执行过，有缓存' : '未缓存' }}
+                </span>
+              </el-option>
+              <el-option value="__NEW__" label="➕ 新建登录账号…" />
+            </el-select>
+            <div v-if="selectedLoginMethodId === '__NEW__'" class="login-new-form">
+              <div class="login-field-row">
+                <span class="login-field-label">登录网址</span>
+                <el-input v-model="newLogin.loginUrl" placeholder="例如：https://sso.example.com/login" class="login-field-input" />
+              </div>
+              <div class="login-field-row">
+                <span class="login-field-label">账号</span>
+                <el-input v-model="newLogin.username" placeholder="登录账号" class="login-field-input" />
+              </div>
+              <div class="login-field-row">
+                <span class="login-field-label">密码</span>
+                <el-input v-model="newLogin.password" placeholder="登录密码" show-password class="login-field-input" />
+              </div>
+              <div v-for="(step, si) in newLogin.extraSteps" :key="si" class="login-extra-step">
+                <div class="login-field-row">
+                  <span class="login-field-label">动态值类型</span>
+                  <el-select v-model="step.valueType" placeholder="请选择动态值" class="login-field-input">
+                    <el-option v-for="opt in dynamicValueOptions" :key="opt" :label="opt" :value="opt" />
+                  </el-select>
+                </div>
+                <div v-if="step.valueType === '自定义'" class="login-field-row">
+                  <span class="login-field-label">自定义名称</span>
+                  <el-input v-model="step.customName" placeholder="请输入动态值名称" class="login-field-input" />
+                </div>
+                <div class="login-field-row">
+                  <span class="login-field-label">补充步骤</span>
+                  <el-input v-model="step.desc" placeholder="该动态值的处理步骤，如：识别图形验证码并填入" class="login-field-input" />
+                  <el-button type="danger" link @click="newLogin.extraSteps.splice(si, 1)">删除</el-button>
+                </div>
+              </div>
+              <el-button type="primary" link @click="newLogin.extraSteps.push({ valueType: '', customName: '', desc: '' })">
+                ➕ 新增补充步骤
+              </el-button>
+              <div class="login-new-actions">
+                <el-button type="primary" :loading="savingLogin" @click="saveNewLoginMethod">确认保存</el-button>
+                <span class="login-save-hint">保存后即可用于生成脚本 / 调试 / 执行（角色名默认为账号）</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 用例名称 -->
           <div class="form-item">
             <label class="form-label">用例名称 <span class="required">*</span></label>
@@ -44,7 +110,7 @@
               v-model="nlpInstruction"
               type="textarea"
               :rows="4"
-              placeholder="例如：打开 https://www.ebay.com，输入 'Headphones'，点击搜索按钮"
+              placeholder="登录后的步骤：输入xxx，点击xxx，验证xxx（登录步骤由上方登录方式自动处理，无需在此描述）"
             />
           </div>
 
@@ -113,7 +179,8 @@ import { ChatLineSquare, MagicStick, VideoPlay, Document } from '@element-plus/i
 import { YamlEditor } from '@/components/yaml'
 import { AiScriptGeneratorDialog, ExecutionTerminal } from '@/components/common'
 import { useProjectStore, useCaseStore, useConfigStore } from '@/stores'
-import { nlpToActions, debugExecute, cancelDebugExecute, getCaseDirectories, streamNlpToYaml, type CaseDirectory } from '@/api/cases'
+import { nlpToActions, debugExecute, cancelDebugExecute, getCaseDirectories, streamNlpToYaml, getLoginMethods, createLoginMethod, type CaseDirectory, type LoginMethod, type LoginMethodType } from '@/api/cases'
+import yamlLib from 'js-yaml'
 import { request } from '@/api'
 import type { YamlConfig, FlowStepType } from '@/types'
 
@@ -125,6 +192,141 @@ const yamlEditorRef = ref<InstanceType<typeof YamlEditor>>()
 
 const directoryId = ref('')
 const directories = ref<CaseDirectory[]>([])
+
+// ── 登录方式（必选） ──
+const loginType = ref<LoginMethodType | ''>('')
+const loginMethods = ref<LoginMethod[]>([])
+const selectedLoginMethodId = ref('')
+const noneUrl = ref('')
+
+interface ExtraStep { valueType: string; customName: string; desc: string }
+const dynamicValueOptions = ['图形验证码', '短信验证码', '滑块验证', '邮件验证码', '自定义']
+const newLogin = ref<{ loginUrl: string; username: string; password: string; extraSteps: ExtraStep[] }>({
+  loginUrl: '', username: '', password: '', extraSteps: []
+})
+
+const filteredLoginMethods = computed(() =>
+  loginMethods.value.filter(m => m.type === loginType.value)
+)
+
+// 当前选中的登录方式记录（用于策略生成登录 NLP）
+const currentLoginMethod = computed<LoginMethod | undefined>(() =>
+  loginMethods.value.find(m => m.id === selectedLoginMethodId.value)
+)
+
+const lastRoleKey = (pid: string, type: string) => `lastLoginRole_${pid}_${type}`
+
+const loadLoginMethods = async (pid: string) => {
+  loginMethods.value = pid ? await getLoginMethods(pid) : []
+  // 默认选中上次执行的角色
+  const remembered = pid ? localStorage.getItem(lastRoleKey(pid, loginType.value || 'cas')) : ''
+  if (remembered && loginMethods.value.some(m => m.id === remembered)) {
+    selectedLoginMethodId.value = remembered
+  } else {
+    selectedLoginMethodId.value = ''
+  }
+}
+
+watch(loginType, t => {
+  if (!t || t === 'none') { selectedLoginMethodId.value = ''; return }
+  const remembered = currentProjectId.value ? localStorage.getItem(lastRoleKey(currentProjectId.value, t)) : ''
+  if (remembered && loginMethods.value.some(m => m.id === remembered && m.type === t)) {
+    selectedLoginMethodId.value = remembered
+  } else {
+    selectedLoginMethodId.value = ''
+  }
+})
+
+// 补充步骤（结构化）→ stepsNlp 存储文本（[动态] 前缀，与执行引擎兼容）
+const extraStepsToNlp = (steps: ExtraStep[]): string => {
+  return steps
+    .filter(s => s.desc.trim())
+    .map(s => `[动态] ${s.desc.trim()}`)
+    .join('\n')
+}
+
+// 策略生成登录 NLP：打开url，输入登录名xxx，密码xxx，补充步骤xxxx
+const buildLoginNlp = (m?: LoginMethod): string => {
+  if (!m || !m.loginUrl) return ''
+  let nlp = `打开 ${m.loginUrl}，输入登录名 ${m.username}，密码 ${m.password}`
+  if (m.stepsNlp) {
+    const extra = m.stepsNlp.split('\n').map(s => s.replace(/^\[动态\]\s*/, '').trim()).filter(Boolean)
+    if (extra.length > 0) nlp += '，' + extra.join('，')
+  }
+  return nlp
+}
+
+const savingLogin = ref(false)
+
+// 校验新建登录账号表单，返回错误信息（null 表示通过）
+const validateNewLogin = (): string | null => {
+  const f = newLogin.value
+  if (!f.loginUrl.trim()) return '请输入登录网址'
+  if (!f.username.trim() || !f.password.trim()) return '请输入账号和密码'
+  for (const s of f.extraSteps) {
+    if (!s.valueType) return '请选择补充步骤的动态值类型'
+    if (s.valueType === '自定义' && !s.customName.trim()) return '请输入自定义动态值名称'
+    if (!s.desc.trim()) return '请填写补充步骤内容'
+  }
+  return null
+}
+
+// 确认保存新建登录账号（账号即角色名，点击即落库并自动选中）
+const saveNewLoginMethod = async (): Promise<LoginMethod | null> => {
+  const err = validateNewLogin()
+  if (err) { ElMessage.warning(err); return null }
+  if (!currentProjectId.value || !loginType.value || loginType.value === 'none') return null
+  savingLogin.value = true
+  try {
+    const f = newLogin.value
+    const created = await createLoginMethod({
+      projectId: currentProjectId.value,
+      type: loginType.value as LoginMethodType,
+      name: `${loginType.value}登录-${f.username.trim()}`,
+      roleName: f.username.trim(),
+      loginUrl: f.loginUrl.trim(),
+      username: f.username.trim(),
+      password: f.password,
+      stepsNlp: extraStepsToNlp(f.extraSteps) || undefined,
+    })
+    loginMethods.value = await getLoginMethods(currentProjectId.value)
+    selectedLoginMethodId.value = created.id
+    newLogin.value = { loginUrl: '', username: '', password: '', extraSteps: [] }
+    localStorage.setItem(lastRoleKey(currentProjectId.value, loginType.value), created.id)
+    ElMessage.success('登录账号已保存')
+    return created
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error || e?.message || '保存登录账号失败')
+    return null
+  } finally {
+    savingLogin.value = false
+  }
+}
+
+// 新建表单已填写但未点"确认保存"
+const hasUnsavedNewLogin = computed(() =>
+  selectedLoginMethodId.value === '__NEW__' &&
+  !!(newLogin.value.loginUrl.trim() || newLogin.value.username.trim() || newLogin.value.password)
+)
+
+// 确保登录方式 ID 就绪：免登录 → ''；新建未保存 → 自动保存；已选 → 原 id
+const ensureLoginMethodId = async (): Promise<string | null> => {
+  if (!loginType.value) { ElMessage.warning('请选择登录方式'); return null }
+  if (loginType.value === 'none') {
+    if (!noneUrl.value.trim()) { ElMessage.warning('请输入目标网址'); return null }
+    return ''
+  }
+
+  if (selectedLoginMethodId.value === '__NEW__') {
+    const created = await saveNewLoginMethod()
+    return created ? created.id : null
+  }
+
+  if (!selectedLoginMethodId.value) { ElMessage.warning('请选择登录账号，或新建登录账号'); return null }
+  localStorage.setItem(lastRoleKey(currentProjectId.value, loginType.value), selectedLoginMethodId.value)
+  return selectedLoginMethodId.value
+}
+
 const caseName = ref('')
 const caseDescription = ref('')
 const nlpInstruction = ref('')
@@ -207,24 +409,77 @@ const syncNlpToYaml = async () => {
   }
 }
 
+// 合并登录 NLP（策略生成）与业务步骤 NLP，供智能生成 YAML 使用（幂等：已含登录前缀时不重复拼）
+const mergeNlpForGeneration = (businessNlp: string): string => {
+  const nlp = businessNlp.trim()
+  if (loginType.value === 'none') {
+    const url = noneUrl.value.trim()
+    if (!url) return nlp
+    return nlp.startsWith(`打开 ${url}`) ? nlp : `打开 ${url}\n${nlp}`
+  }
+  if (loginType.value && loginType.value !== 'none') {
+    const loginNlp = buildLoginNlp(currentLoginMethod.value)
+    if (!loginNlp) return nlp
+    return nlp.startsWith(loginNlp) ? nlp : `${loginNlp}\n${nlp}`
+  }
+  return nlp
+}
+
 // 生成脚本：调 AI 拆解 NLP → 多 action 类型
 const generateScript = async (nlp = generatorNlp.value) => {
   if (!nlp.trim()) { ElMessage.warning('请先输入测试指令（NLP）'); return }
-  generatorNlp.value = nlp
+  // 合并登录 NLP（策略生成）并回显到对话框，让用户可见可编辑
+  const merged = mergeNlpForGeneration(nlp)
+  generatorNlp.value = merged
   generatingScript.value = true; streamedScript.value = ''; streamedReasoning.value = ''; streamDialog.value = true
   try {
-    const yaml = await streamNlpToYaml(nlp.trim(), chunk => { streamedScript.value += chunk }, reasoning => { streamedReasoning.value += reasoning })
+    const yaml = await streamNlpToYaml(merged.trim(), chunk => { streamedScript.value += chunk }, reasoning => { streamedReasoning.value += reasoning })
     streamedScript.value = yaml
   } catch (e: any) { ElMessage.error(e.message || '脚本生成失败') } finally { generatingScript.value = false }
 }
 
-const handleGenerateScript = () => {
+// 执行时剔除 YAML 中的登录 task（登录阶段由登录方式独立缓存执行，避免重复登录）
+const stripLoginTask = (yamlContent: string): string => {
+  try {
+    const doc = yamlLib.load(yamlContent) as any
+    if (doc?.tasks && Array.isArray(doc.tasks) && doc.tasks.length > 1) {
+      const rest = doc.tasks.filter((t: any) => !/^登录/.test(String(t?.name || '')))
+      if (rest.length > 0 && rest.length < doc.tasks.length) {
+        return yamlLib.dump({ ...doc, tasks: rest })
+      }
+    }
+  } catch { /* YAML 解析失败时原样返回 */ }
+  return yamlContent
+}
+
+const handleGenerateScript = async () => {
+  // CAS/本地：新建账号未保存时先自动保存（否则合并不到登录 NLP）；免登录：需填目标网址
+  if (loginType.value && loginType.value !== 'none' && selectedLoginMethodId.value === '__NEW__') {
+    const saved = await saveNewLoginMethod()
+    if (!saved) return
+  }
+  if (loginType.value === 'none' && !noneUrl.value.trim()) {
+    ElMessage.warning('请输入目标网址'); return
+  }
   generatorNlp.value = nlpInstruction.value
   return generateScript()
 }
 
+// 从合并 NLP 中剥离登录前缀（回写业务区时保持业务步骤纯度，避免执行时与登录阶段重复）
+const stripLoginNlpPrefix = (mergedNlp: string): string => {
+  const nlp = mergedNlp.trim()
+  if (loginType.value === 'none') {
+    const url = noneUrl.value.trim()
+    const prefix = `打开 ${url}`
+    return url && nlp.startsWith(prefix) ? nlp.slice(prefix.length).trim() : nlp
+  }
+  const loginNlp = buildLoginNlp(currentLoginMethod.value)
+  if (loginNlp && nlp.startsWith(loginNlp)) return nlp.slice(loginNlp.length).trim()
+  return nlp
+}
+
 const confirmGeneratedScript = ({ nlp, yaml }: { nlp: string; yaml: string }) => {
-  nlpInstruction.value = nlp.trim()
+  nlpInstruction.value = stripLoginNlpPrefix(nlp)
   yamlContent.value = yaml
   yamlEditorRef.value?.loadFromYaml(yaml)
   streamDialog.value = false
@@ -235,7 +490,11 @@ onMounted(async () => {
   await Promise.all([caseStore.fetchCases(), configStore.fetchAIConfig()])
   await projectStore.fetchProjects()
 })
-watch(currentProjectId, async id => { directoryId.value = ''; directories.value = id ? await getCaseDirectories(id) : [] }, { immediate: true })
+watch(currentProjectId, async id => {
+  directoryId.value = ''
+  directories.value = id ? await getCaseDirectories(id) : []
+  await loadLoginMethods(id)
+}, { immediate: true })
 
 const handleClear = () => { caseName.value = ''; caseDescription.value = ''; nlpInstruction.value = ''; directoryId.value = ''; yamlEditorRef.value?.reset() }
 
@@ -248,6 +507,9 @@ const addLog = (message: string, type: LogEntry['type'] = 'info') => {
 // 调试只执行当前 YAML 草稿，不创建测试用例。
 const handleDebug = async (headless: boolean) => {
   if (!currentProjectId.value) { ElMessage.warning('请先在右上角选择项目'); return }
+  // 登录方式校验 + 新建账号自动保存（否则调试 NLP 合并不到登录信息，浏览器不打开网址）
+  const debugLoginId = await ensureLoginMethodId()
+  if (debugLoginId === null) return
   yamlEditorRef.value?.syncFormToYaml()
   const yaml = yamlEditorRef.value?.getYamlContent() || yamlContent.value
   if (executionMode.value === 'YAML' && !yaml.trim()) { ElMessage.warning('yaml脚本未生成'); return }
@@ -260,7 +522,8 @@ const handleDebug = async (headless: boolean) => {
     const result = await debugExecute({
       projectId: currentProjectId.value,
       name: caseName.value.trim() || '未保存用例调试',
-      nlp: nlpInstruction.value.trim(),
+      // 调试不走登录阶段，需合并完整流程（登录/免登录网址 + 业务步骤），否则浏览器停在空白页
+      nlp: mergeNlpForGeneration(nlpInstruction.value),
       yamlScript: yaml,
       executionMode: executionMode.value,
       headless
@@ -320,12 +583,15 @@ const handleCreateCase = async () => {
   if (!caseName.value.trim()) { ElMessage.warning('请输入用例名称'); return }
   if (!nlpInstruction.value.trim()) { ElMessage.warning('请输入测试指令（NLP）'); return }
   if (!directoryId.value) { ElMessage.warning('请选择所属目录'); return }
+  const loginMethodId = await ensureLoginMethodId()
+  if (loginMethodId === null) return
   yamlEditorRef.value?.syncFormToYaml()
   const yaml = yamlEditorRef.value?.getYamlContent() || yamlContent.value
   try {
     const created = await caseStore.addCase({
       projectId: currentProjectId.value,
       directoryId: directoryId.value,
+      loginMethodId: loginMethodId || undefined,
       name: caseName.value.trim(),
       description: caseDescription.value.trim() || undefined,
       nlp: nlpInstruction.value.trim(),
@@ -344,6 +610,8 @@ const handleExecuteAndSave = async () => {
   if (!currentProjectId.value) { addLog('请先在右上角选择项目', 'warning'); return }
   if (!caseName.value.trim()) { addLog('请输入用例名称', 'warning'); return }
   if (!nlpInstruction.value.trim()) { addLog('请输入测试指令（NLP）', 'warning'); return }
+  const loginMethodId = await ensureLoginMethodId()
+  if (loginMethodId === null) return
   executing.value = true
   executionLogs.value = []
   executionStatus.value = 'running'
@@ -358,10 +626,13 @@ const handleExecuteAndSave = async () => {
       {
         projectId: currentProjectId.value,
         directoryId: directoryId.value,
+        loginMethodId: loginMethodId || undefined,
         name: caseName.value.trim(),
         description: caseDescription.value.trim() || undefined,
-        nlp: nlpInstruction.value,
-        customYaml: yamlContent.value,
+        // 免登录：NLP 需带目标网址（否则 NLP 模式不导航）；CAS/本地：保持业务步骤（登录由登录方式阶段处理）
+        nlp: loginType.value === 'none' ? mergeNlpForGeneration(nlpInstruction.value) : nlpInstruction.value,
+        // 非免登录时剔除 YAML 中的登录 task（登录由登录方式独立缓存执行）
+        customYaml: loginMethodId ? stripLoginTask(yamlContent.value) : yamlContent.value,
         executionMode: executionMode.value,
         headless: configStore.aiConfig.browserMode === 'headless'
       },
@@ -464,6 +735,31 @@ const handleExecuteAndSave = async () => {
     }
     .project-selector { display: flex; gap: 12px; .project-select { flex: 1; } }
     .action-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+    .login-role-item {
+      .cache-tag {
+        float: right; font-size: 12px; padding: 1px 8px; border-radius: 8px;
+        &.is-cached { color: #67c23a; background: #f0f9eb; }
+        &.is-uncached { color: #e6a23c; background: #fdf6ec; }
+      }
+      .login-new-form {
+        margin-top: 12px; padding: 14px; background: #f7f9fc; border-radius: 8px;
+        display: flex; flex-direction: column; gap: 10px;
+        .login-new-input { width: 100%; }
+        .login-field-row {
+          display: flex; align-items: center; gap: 10px;
+          .login-field-label { flex: 0 0 80px; font-size: 13px; color: #606266; text-align: right; }
+          .login-field-input { flex: 1; }
+        }
+        .login-extra-step {
+          padding: 10px; background: #fff; border: 1px dashed #dcdfe6; border-radius: 6px;
+          display: flex; flex-direction: column; gap: 8px;
+        }
+        .login-new-actions {
+          display: flex; align-items: center; gap: 10px; margin-top: 4px;
+          .login-save-hint { font-size: 12px; color: #909399; }
+        }
+      }
+    }
   }
   .terminal-section { margin-top: 20px; }
   .editor-panel {

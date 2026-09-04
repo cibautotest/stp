@@ -170,6 +170,40 @@
     }
   }
 
+  // ─── Get login methods of a project ────────────────────────
+  async function getLoginMethods(token, projectId) {
+    var platformUrl = getPlatformUrl();
+    try {
+      var resp = await fetch(platformUrl + '/api/platform/login-methods?projectId=' + encodeURIComponent(projectId), {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!resp.ok) return { success: false, error: '获取登录方式列表失败' };
+      var data = await resp.json();
+      return { success: true, methods: Array.isArray(data) ? data : [] };
+    } catch (e) {
+      return { success: false, error: '网络错误，请检查平台是否已启动' };
+    }
+  }
+
+  // ─── Create login method ───────────────────────────────────
+  async function createLoginMethod(token, payload) {
+    var platformUrl = getPlatformUrl();
+    try {
+      var resp = await fetch(platformUrl + '/api/platform/login-methods', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(payload)
+      });
+      if (resp.ok) {
+        return { success: true, method: await resp.json() };
+      }
+      var errData = await resp.json().catch(function () { return {}; });
+      return { success: false, error: errData.error || '创建登录方式失败' };
+    } catch (e) {
+      return { success: false, error: '网络错误，请检查平台是否已启动' };
+    }
+  }
+
   // ─── Expose to global scope ────────────────────────────────
   window.MidsceneAuth = {
     login: login,
@@ -177,6 +211,8 @@
     createProject: createProject,
     getDirectories: getDirectories,
     createDirectory: createDirectory,
+    getLoginMethods: getLoginMethods,
+    createLoginMethod: createLoginMethod,
     getPlatformUrl: getPlatformUrl
   };
 })();

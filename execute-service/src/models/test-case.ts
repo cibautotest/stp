@@ -11,6 +11,19 @@ export interface TestCaseInput {
   executionMode?: 'NLP' | 'YAML';
   trafficTaggingEnabled?: boolean;
   kafkaConfig?: KafkaConfig;
+  loginMethod?: LoginMethodPayload;
+  targetUrl?: string;
+}
+
+// 登录方式负载（type != none 时执行登录阶段，独立缓存 ID：login_{id}）
+export interface LoginMethodPayload {
+  id: string;
+  type: 'none' | 'cas' | 'local';
+  loginUrl?: string;
+  username?: string;
+  password?: string;
+  stepsNlp?: string;
+  yamlScript?: string;
 }
 
 export interface KafkaConfig {

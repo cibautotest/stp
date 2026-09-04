@@ -36,6 +36,25 @@ public class YamlGeneratorService {
 
     private static final Logger log = LoggerFactory.getLogger(YamlGeneratorService.class);
 
+    /**
+     * Midscene YAML 生成的系统提示词
+     * 含缓存标记规则：动态步骤（[动态] 标记、图形验证码、日期、随机值等）输出 cacheable: false
+     */
+    private static final String YAML_SYSTEM_PROMPT =
+            "You generate executable Midscene YAML. Return ONLY valid YAML, without markdown fences. " +
+            "Include web.url if the instruction contains a URL. Include exactly one tasks item and a flow of Midscene actions " +
+            "(ai, aiTap, aiInput, aiAssert, aiWaitFor, aiScroll, aiHover, sleep). Preserve the user's intent exactly.\n" +
+            "任务拆分规则（重要）：\n" +
+            "1. 若输入内容包含登录步骤（打开登录页、输入登录名/账号、输入密码、验证码处理、点击登录按钮），必须将这些步骤放在一个 name 为「登录」的独立 task 中。\n" +
+            "2. 登录之后的业务步骤放在后续 task 中（一个或多个）。\n" +
+            "3. 若输入内容不包含登录步骤，正常生成业务 task 即可。\n" +
+            "缓存标记规则（重要）：\n" +
+            "1. 默认所有步骤都走缓存（不写 cacheable，默认 true）。\n" +
+            "2. 若某一步被用户标记为 [动态]，或其内容每次执行都不同（图形验证码、滑块、短信验证码、当前日期/时间、随机数、一次性令牌、每次不同的数据），必须在该步骤上添加：cacheable: false\n" +
+            "3. 若某一步的内容固定不变（固定账号、固定密码、固定菜单名、固定按钮、固定查询词），不要添加 cacheable。\n" +
+            "4. 断言/查询类步骤（aiAssert / aiQuery / aiBoolean）本身永不缓存，无需标记。\n" +
+            "5. 用户步骤中的 [动态] 标记只用于判定缓存，不要保留在最终 YAML 的 prompt 文本里。";
+
     private static final Pattern URL_PATTERN = Pattern.compile(
             "https?://[^\\s，,，\\u4e00-\\u9fa5]+"
     );
@@ -73,7 +92,7 @@ public class YamlGeneratorService {
             JSONArray messages = new JSONArray();
             JSONObject system = new JSONObject();
             system.set("role", "system");
-            system.set("content", "You generate executable Midscene YAML. Return ONLY valid YAML, without markdown fences. Include web.url if the instruction contains a URL. Include exactly one tasks item and a flow of Midscene actions (ai, aiTap, aiInput, aiAssert, aiWaitFor, aiScroll, aiHover, sleep). Preserve the user's intent exactly.");
+            system.set("content", YAML_SYSTEM_PROMPT);
             messages.add(system);
             JSONObject user = new JSONObject();
             user.set("role", "user");
@@ -105,7 +124,7 @@ public class YamlGeneratorService {
             JSONObject body = new JSONObject();
             body.set("model", config.getModelName()); body.set("temperature", 0.1); body.set("stream", true);
             JSONArray messages = new JSONArray();
-            messages.add(new JSONObject().set("role", "system").set("content", "You generate executable Midscene YAML. Return ONLY valid YAML, without markdown fences. Include web.url if the instruction contains a URL. Include exactly one tasks item and a flow of Midscene actions (ai, aiTap, aiInput, aiAssert, aiWaitFor, aiScroll, aiHover, sleep). Preserve the user's intent exactly."));
+            messages.add(new JSONObject().set("role", "system").set("content", YAML_SYSTEM_PROMPT));
             messages.add(new JSONObject().set("role", "user").set("content", nlp)); body.set("messages", messages);
             String apiUrl = config.getBaseUrl().replaceAll("/+$", "") + "/chat/completions";
             StringBuilder complete = new StringBuilder();
