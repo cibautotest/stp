@@ -10,20 +10,37 @@
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
   },
   "description": "Open-source SDK for automating web pages using natural language through AI.",
-  "host_permissions": [ "\u003Call_urls>" ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "icons": {
     "128": "icon128.png"
   },
   "incognito": "split",
   "manifest_version": 3,
   "name": "测试用例可视化插件",
-  "permissions": [ "activeTab", "tabs", "sidePanel", "debugger", "scripting", "storage", "alarms" ],
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "sidePanel",
+    "debugger",
+    "scripting",
+    "storage",
+    "alarms",
+    "downloads"
+  ],
   "side_panel": {
     "default_path": "./index.html"
   },
   "version": "1.92",
-  "web_accessible_resources": [ {
-    "matches": [ "\u003Call_urls>" ],
-    "resources": [ "*.wasm" ]
-  } ]
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "*.wasm"
+      ]
+    }
+  ]
 }

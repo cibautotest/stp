@@ -4,6 +4,7 @@ import com.smarttesting.platform.entity.TestCase;
 import com.smarttesting.platform.model.ActionStep;
 import com.smarttesting.platform.model.IdsRequest;
 import com.smarttesting.platform.model.NlpRequest;
+import com.smarttesting.platform.service.NlpStandardizationService;
 import com.smarttesting.platform.service.TestCaseService;
 import com.smarttesting.platform.service.YamlGeneratorService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,6 +54,9 @@ public class TestCaseController {
     @Resource
     private YamlGeneratorService yamlGeneratorService;
 
+    @Resource
+    private NlpStandardizationService nlpStandardizationService;
+
     @Operation(summary = "List test cases")
     @GetMapping
     public ResponseEntity<List<TestCase>> list(
@@ -82,21 +86,44 @@ public class TestCaseController {
 
     @Operation(summary = "Get test case cache")
     @GetMapping(value = "/{id}/cache", produces = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<String> getCache(@Size(max = 64) @PathVariable String id) {
-        TestCase testCase = testCaseService.getById(id);
-        if (testCase == null || testCase.getCacheContent() == null || testCase.getCacheContent().isBlank()) {
+    public ResponseEntity<String> getCache(@Size(max = 64) @PathVariable String id,
+                                           Authentication authentication) {
+        Long userId = authentication != null ? (Long) authentication.getPrincipal() : null;
+        // DB 优先；DB 无缓存时回源执行引擎磁盘缓存并回填（保证看到最新缓存）
+        String cache = testCaseService.getCacheWithFallback(id, userId);
+        if (cache == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(testCase.getCacheContent());
+        return ResponseEntity.ok(cache);
     }
 
     @Operation(summary = "Create test case")
     @PostMapping
     public ResponseEntity<?> create(@Parameter(description = "Case payload") @Valid @RequestBody TestCase testCase) {
+        // 与 createAndExecute 一致：创建时标准化 NLP 步骤说明（AI 失败自动降级，不阻塞创建）
+        if (testCase.getNlp() != null && !testCase.getNlp().isBlank()) {
+            String standardized = nlpStandardizationService.standardize(testCase.getNlp());
+            if (standardized != null && !standardized.isBlank()) {
+                testCase.setNlp(standardized);
+            }
+        }
         testCase.setStatus("PENDING");
         testCase.setDeleted(0);
         testCaseService.save(testCase);
         return ResponseEntity.status(HttpStatus.CREATED).body(testCase);
+    }
+
+    @Operation(summary = "Batch standardize NLP of existing cases in a project")
+    @PostMapping("/standardize-batch")
+    public ResponseEntity<?> standardizeBatch(
+            @Parameter(description = "Project ID", required = true) @Size(max = 64) @RequestParam String projectId,
+            Authentication authentication) {
+        Long userId = authentication != null ? (Long) authentication.getPrincipal() : null;
+        String role = authentication != null ?
+                authentication.getAuthorities().stream().findFirst()
+                        .map(a -> a.getAuthority().replace("ROLE_", "").toLowerCase())
+                        .orElse("general") : "general";
+        return ResponseEntity.ok(testCaseService.standardizeBatch(projectId, userId, role));
     }
 
     @Operation(summary = "Update test case")
@@ -110,6 +137,8 @@ public class TestCaseController {
 
         if (testCase.getProjectId() != null) existing.setProjectId(testCase.getProjectId());
         if (testCase.getDirectoryId() != null) existing.setDirectoryId(testCase.getDirectoryId());
+        // 允许给存量用例绑定/变更/解绑登录方式（空串=解绑为免登录）
+        if (testCase.getLoginMethodId() != null) existing.setLoginMethodId(testCase.getLoginMethodId());
         if (testCase.getName() != null) existing.setName(testCase.getName());
         if (testCase.getDescription() != null) existing.setDescription(testCase.getDescription());
         if (testCase.getNlp() != null) existing.setNlp(testCase.getNlp());

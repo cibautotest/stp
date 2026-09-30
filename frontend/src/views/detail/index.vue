@@ -167,47 +167,18 @@ const cleanNlp = (nlp: string): string => {
   return nlp.replace(/\s*\|\s*YAML已更新[：:].*$/g, '').trim()
 }
 
-// ── 登录方式（用于生成脚本时拼登录 NLP） ──
+// ── 登录方式（基本信息展示；生成脚本不拼接登录——登录由用例绑定的登录方式在执行阶段独立完成） ──
 const loginMethods = ref<LoginMethod[]>([])
 const currentLoginMethod = computed<LoginMethod | undefined>(() =>
   loginMethods.value.find(m => m.id === (detail.value as any)?.loginMethodId)
 )
 
-// 策略生成登录 NLP：打开url，输入登录名xxx，密码xxx，补充步骤xxxx
-const buildLoginNlp = (m?: LoginMethod): string => {
-  if (!m || !m.loginUrl) return ''
-  let nlp = `打开 ${m.loginUrl}，输入登录名 ${m.username}，密码 ${m.password}`
-  if (m.stepsNlp) {
-    const extra = m.stepsNlp.split('\n').map(s => s.replace(/^\[动态\]\s*/, '').trim()).filter(Boolean)
-    if (extra.length > 0) nlp += '，' + extra.join('，')
-  }
-  return nlp
-}
-
-// 合并登录 NLP（幂等：已含登录前缀时不重复拼）
-const mergeLoginNlp = (businessNlp: string): string => {
-  const nlp = businessNlp.trim()
-  const loginNlp = buildLoginNlp(currentLoginMethod.value)
-  if (!loginNlp) return nlp
-  return nlp.startsWith(loginNlp) ? nlp : `${loginNlp}\n${nlp}`
-}
-
-// 从合并 NLP 中剥离登录前缀（回写用例时保持业务步骤纯度，避免执行时重复登录）
-const stripLoginNlp = (mergedNlp: string): string => {
-  const nlp = mergedNlp.trim()
-  const loginNlp = buildLoginNlp(currentLoginMethod.value)
-  if (loginNlp && nlp.startsWith(loginNlp)) return nlp.slice(loginNlp.length).trim()
-  return nlp
-}
-
 const generateScript = async (nlp = generatorNlp.value) => {
   if (!nlp.trim()) { ElMessage.warning('请输入NLP测试指令'); return }
-  // 合并登录 NLP 并回显到对话框（可见可编辑）
-  const merged = mergeLoginNlp(nlp)
-  generatorNlp.value = merged
+  generatorNlp.value = nlp
   generatingScript.value = true
   streamedScript.value = ''; streamedReasoning.value = ''; streamDialog.value = true
-  try { const yaml = await streamNlpToYaml(merged.trim(), chunk => { streamedScript.value += chunk }, reasoning => { streamedReasoning.value += reasoning }); streamedScript.value = yaml } catch (e: any) { ElMessage.error(e.message || '脚本生成失败') } finally { generatingScript.value = false }
+  try { const yaml = await streamNlpToYaml(nlp.trim(), chunk => { streamedScript.value += chunk }, reasoning => { streamedReasoning.value += reasoning }); streamedScript.value = yaml } catch (e: any) { ElMessage.error(e.message || '脚本生成失败') } finally { generatingScript.value = false }
 }
 
 const openGenerateScript = () => {
@@ -216,8 +187,7 @@ const openGenerateScript = () => {
 }
 
 const confirmGeneratedScript = async ({ nlp, yaml }: { nlp: string; yaml: string }) => {
-  // 回写业务步骤（剥离登录前缀；登录由用例绑定的登录方式负责）
-  nlpText.value = stripLoginNlp(nlp)
+  nlpText.value = nlp.trim()
   yamlContent.value = yaml
   yamlEditorRef.value?.loadFromYaml(yaml)
   try {

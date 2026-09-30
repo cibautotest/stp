@@ -70,6 +70,8 @@ export const getCase = (id: string) => {
   return request.get<TestCase>(`/platform/cases/${encodeURIComponent(id)}`)
 }
 export const getCaseCache = (id: string) => request.get<string>(`/platform/cases/${encodeURIComponent(id)}/cache`, { responseType: 'text' })
+// 批量标准化项目下存量用例的 NLP 步骤说明
+export const standardizeBatch = (projectId: string) => request.post<{ total: number; changed: number; failed: number }>('/platform/cases/standardize-batch', null, { params: { projectId } })
 
 // 创建用例并异步执行
 export const createAndExecute = (data: {
@@ -107,6 +109,7 @@ export interface ActionStep {
   type: string
   prompt: string
   value?: string
+  dynamic?: boolean // 动态内容（验证码/日期/随机值等）→ 生成 YAML 时输出 cacheable: false
 }
 export const nlpToActions = (nlp: string) => {
   return request.post<ActionStep[]>('/platform/cases/nlp-to-actions', { nlp })

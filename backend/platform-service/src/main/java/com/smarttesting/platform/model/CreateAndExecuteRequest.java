@@ -29,6 +29,10 @@ public class CreateAndExecuteRequest {
     @Schema(description = "Reusable login method ID (empty means no login)", maxLength = 64)
     private String loginMethodId;
 
+    @Size(max = 1000, message = "targetUrl length must be at most 1000")
+    @Schema(description = "Target page URL (plugin sync: navigate without mixing into NLP text)", maxLength = 1000)
+    private String targetUrl;
+
     @NotBlank(message = "name is required")
     @Size(max = 100, message = "name length must be at most 100")
     @Schema(description = "Case name", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)

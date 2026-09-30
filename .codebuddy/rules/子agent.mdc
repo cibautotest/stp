@@ -1,0 +1,18 @@
+---
+description: 多子 agent 并行执行的使用场景与任务拆分规范
+alwaysApply: false
+enabled: true
+provider: 
+---
+
+当任务可拆为多个无共享状态、无先后依赖的独立子任务时，使用多个子 agent 并行完成。
+
+适用场景：
+- **大范围代码探索**：跨 backend / frontend / execute-service / 插件多模块找实现链路时，派 `code-explorer`（只读，不进入主上下文，省 token）；
+- **并行实施**：如"后端接口 + 前端页面 + 插件表单"三个互不依赖的改动可同时推进；
+- **独立审查**：大改动完成后派 `code-reviewer` 复核。
+
+拆分规范：
+- 每个子 agent 的 prompt 说清目标、边界、**只读还是可写**，不展开无关步骤；
+- 有依赖关系的任务（如"先改类型定义再改调用方"）必须串行，禁止并行；
+- 子 agent 只返回结论摘要，关键代码改动由主 agent 复核落盘。

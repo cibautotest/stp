@@ -1,9 +1,30 @@
 ---
-description: 
+description: 所有功能修改必须纳管到 openspec/changes 的规范
 alwaysApply: true
 enabled: true
-updatedAt: 2026-09-02T05:42:21.366Z
 provider: 
 ---
 
-任何修改（代码或者功能的修改等）都需保存在.\openspec\changes里
+任何功能级修改（新功能、行为变更、架构调整）都需在 `openspec/changes/<change-name>/` 下纳管，产物齐全：
+
+```
+openspec/changes/<change-name>/
+├── proposal.md    # 为什么改、改什么、影响范围
+├── design.md      # 技术方案、关键决策与理由
+├── tasks.md       # 任务清单，实施过程中实时勾选 [x]
+├── specs/<capability>/spec.md  # 能力规格（ADDED/MODIFIED 需求）
+└── verification/  # 验证资产（测试用例 + 证据 + 报告）
+    ├── test-cases.md      # 验收用例清单：步骤、输入、预期结果
+    ├── evidence.md        # 验证证据：API 响应摘要、执行状态、编译退出码
+    └── report.md          # 验收结论报告（可引用 e2e-verifier 输出）
+```
+
+验证资产要求：
+- **测试用例**（验收步骤/单测清单）与**验证证据**（实测响应、截图、执行结果）必须随变更存入 `verification/`，不留"口头验收"；
+- 单元测试代码本身仍放各层 test 目录（backend/src/test、*.test.ts），`verification/test-cases.md` 记录用例清单与覆盖点并链接到代码位置；
+- 归档变更前 `verification/` 必须非空且结论为通过。
+
+规范：
+- 命名用小写连字符（如 `login-method-reuse`）；tasks.md 的 checkbox 是进度追踪的唯一事实源；
+- 实施完成、验收通过后归档变更（openspec archive 流程）；
+- 纯 bug 修复、单点补丁、规则/文档调整可直接改，不强制建档，但跨模块的修复链（如前后端+引擎联动修复）仍建议建档。

@@ -804,6 +804,11 @@
       border-radius: 6px;
       padding: 10px;
     }
+    .midscene-test-url-hint {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
     .midscene-login-field-row {
       display: flex;
       align-items: center;
@@ -1035,7 +1040,8 @@
       .midscene-form-group select:focus { border-color: #54a2ff; }
     }
   </style>
-  <script defer src="/scripts/auth.js"></script>
+  <script defer src="/scripts/stp-file-steps.js"></script>
+<script defer src="/scripts/auth.js"></script>
   <script defer src="/scripts/export-test-case.js"></script>
   <script defer src="/static/js/lib-polyfill.cd23d531.js"></script>
   <script defer src="/static/js/lib-react.9a9b147a.js"></script>
@@ -1094,6 +1100,11 @@
             <label class="midscene-login-type-item"><input type="radio" name="midscene-login-type" value="local"> 本地登录</label>
           </div>
         </div>
+        <div class="midscene-form-group" id="midscene-test-url-group">
+          <label for="midscene-test-url">测试网址 <span style="color:#dc2626;">*</span></label>
+          <input type="url" id="midscene-test-url" placeholder="请输入测试网址，如 https://example.com（免登录=目标页面；CAS/本地登录=登录后的业务页面）">
+          <div class="midscene-test-url-hint">自动填写当前页面网址，可修改</div>
+        </div>
         <div class="midscene-form-group" id="midscene-login-role-group" style="display:none;">
           <label for="midscene-login-role-select">登录角色 <span style="color:#dc2626;">*</span></label>
           <select id="midscene-login-role-select">
@@ -1116,10 +1127,6 @@
         <div class="midscene-form-group">
           <label for="midscene-case-name">用例名称 <span style="color:#dc2626;">*</span></label>
           <input type="text" id="midscene-case-name" placeholder="请输入用例名称">
-        </div>
-        <div class="midscene-form-group">
-          <label for="midscene-test-url">测试网址</label>
-          <input type="url" id="midscene-test-url" placeholder="请输入测试网址，如 https://example.com">
         </div>
         <div class="midscene-step-list">
           <div class="midscene-step-list-title">

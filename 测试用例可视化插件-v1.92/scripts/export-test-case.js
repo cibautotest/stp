@@ -91,6 +91,19 @@
         return;
       }
     }
+    // 无 running 记录：若为 failure，回改最近一条误判的 success（执行中的稳定窗口可能被提前判成功，
+    // 之后才出现 Task failed —— 失败信号必须能覆盖提前的成功判定）
+    if (status === 'failure') {
+      for (var j = list.length - 1; j >= 0; j--) {
+        if (list[j].status === 'success') {
+          list[j].status = 'failure';
+          writeStepLogAll(all);
+          console.log('[STP-DIAG] 回改：最近一条 success 已修正为 failure（Task failed 出现晚于稳定判定）');
+          return;
+        }
+        if (list[j].status === 'failure') return; // 最近一条已是失败（同一失败已处理）
+      }
+    }
   }
 
   function clearStepLog(projectId) {
@@ -205,16 +218,50 @@
     return texts.join('');
   }
 
-  // 判定执行结果：以 SDK 生成的 "Task failed: ..." 为唯一失败标志
-  // （成功响应的描述性文本可能含 error/失败 等词，宽泛关键词会造成误判）
-  function judgeByText(text) {
-    if ((text || '').indexOf('Task failed') >= 0) {
-      return 'failure';
+  // 判定最新一条 running 记录
+  // 核心策略：
+  //   失败（强信号）：全文档扫描 "Task failed"，与指令开始时的基准快照对比——新出现的失败才归属当前步骤
+  //   成功（弱信号）：响应文本连续稳定 STABLE_ROUNDS 轮（约 9s）才判成功，给晚到的失败信号留窗口
+  var _lastSettleText = '';
+  var _stableCount = 0;
+  var _baselineFailSigs = {}; // 新指令发出时页面上已存在的失败文本指纹（旧失败不归属新步骤）
+  var _handledErrBlockKeys = {}; // 已处理的对话区错误块指纹（防重复触发）
+  var STABLE_ROUNDS = 1; // 没返回 Task failed 就是成功——文本一轮稳定即判成功，迟到失败由回改机制兜底
+
+  // 对话区错误块检测：playground 执行失败时把错误渲染为 system-message 内的
+  // .error-message 红字块（见 bundle CSS: .system-message-container .error-message）。
+  // 仅认最后一条用户气泡之后出现的错误块（历史错误块不误伤新步骤）。
+  function findNewErrorBlock() {
+    var bubbles = document.querySelectorAll('.user-message-bubble');
+    if (bubbles.length === 0) return null;
+    var lastBubble = bubbles[bubbles.length - 1];
+    var errEls = document.querySelectorAll(
+      '.system-message-container .error-message, .system-message-content .error-message, [class*="system-message"] [class*="error-message"]'
+    );
+    for (var i = 0; i < errEls.length; i++) {
+      var el = errEls[i];
+      var text = (el.textContent || '').trim();
+      if (!text) continue;
+      // 位置必须在最后一条用户气泡之后
+      if (!(lastBubble.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+      var key = text.slice(0, 120);
+      if (_handledErrBlockKeys[key]) continue;
+      return { key: key, text: text };
     }
-    return 'success';
+    return null;
   }
 
-  // 判定最新一条 running 记录
+  function snapshotFailSigs() {
+    var sigs = {};
+    try {
+      var fullText = document.body.innerText || '';
+      var re = /(?:task\s+failed|execution\s+failed)[^\n]{0,200}/gi;
+      var m;
+      while ((m = re.exec(fullText))) sigs[m[0].replace(/\s+/g, ' ').trim()] = 1;
+    } catch (e) {}
+    return sigs;
+  }
+
   function settleLatestRunning() {
     var projectId = getCurrentProjectId();
     if (!projectId) return;
@@ -223,19 +270,55 @@
     for (var i = log.length - 1; i >= 0; i--) {
       if (log[i].status === 'running') { latestRunning = log[i]; break; }
     }
-    if (!latestRunning) return;
-    var bubbles = document.querySelectorAll('.user-message-bubble');
-    if (bubbles.length === 0) {
-      // DOM 已清除，无法判定 → 保留 running
+
+    // 失败判定（优先级最高）：新出现的失败指纹 → 判失败（可回改提前误判的 success）
+    var currentSigs = snapshotFailSigs();
+    var newFail = null;
+    for (var sig in currentSigs) {
+      if (!_baselineFailSigs[sig]) { newFail = sig; break; }
+    }
+    if (newFail) {
+      console.log('[STP-DIAG] settleLatestRunning 判定: failure（新出现失败文本）:', newFail.slice(0, 80));
+      updateLatestRunningStatus(projectId, 'failure');
+      // 已处理的失败纳入基准，避免重复触发
+      for (var s in currentSigs) _baselineFailSigs[s] = 1;
+      _lastSettleText = '';
+      _stableCount = 0;
       return;
     }
+
+    if (!latestRunning) return;
+
+    // 成功判定：响应区段连续稳定 STABLE_ROUNDS 轮才判成功
+    var bubbles = document.querySelectorAll('.user-message-bubble');
+    if (bubbles.length === 0) { scheduleSettle(); return; } // DOM 已清除，继续等待
     var lastBubble = bubbles[bubbles.length - 1];
     var segment = collectAssistantText(lastBubble);
-    // 区段需要有一定内容量才判定（避免执行刚开始时误判）
-    if (segment.trim().length < 10) return;
-    var verdict = judgeByText(segment);
-    console.log('[STP-DIAG] settleLatestRunning 判定:', verdict, '| segment 前200字:', segment.slice(0, 200).replace(/\s+/g, ' '));
-    updateLatestRunningStatus(projectId, verdict);
+    if (!segment || segment.trim().length < 10) { scheduleSettle(); return; } // 内容不足，继续等待
+    if (segment !== _lastSettleText) {
+      _lastSettleText = segment; // 文本仍在变化（执行中）
+      _stableCount = 0;
+      scheduleSettle();
+      return;
+    }
+    _stableCount++;
+    if (_stableCount < STABLE_ROUNDS) { scheduleSettle(); return; } // 稳定轮数不足，继续观察
+    // 成功判定前的最后防线：对话区存在错误块 → 判失败（防"报错却被误判成功"）
+    var errBlockBeforeSuccess = findNewErrorBlock();
+    if (errBlockBeforeSuccess) {
+      _handledErrBlockKeys[errBlockBeforeSuccess.key] = 1;
+      console.log('[STP-DIAG] settleLatestRunning 判定: failure（对话区错误块）:', errBlockBeforeSuccess.text.slice(0, 80));
+      updateLatestRunningStatus(projectId, 'failure');
+      _lastSettleText = '';
+      _stableCount = 0;
+      return;
+    }
+    console.log('[STP-DIAG] settleLatestRunning 判定: success（无失败信号）| 前200字:', segment.slice(0, 200).replace(/\s+/g, ' '));
+    updateLatestRunningStatus(projectId, 'success');
+    _lastSettleText = '';
+    _stableCount = 0;
+    // 成功后的失败兜底窗口：Task failed 可能晚于稳定文本出现，再观察一轮（可回改）
+    scheduleSettle();
   }
 
   function scheduleSettle() {
@@ -258,6 +341,10 @@
       settleLatestRunning();
     }
     _lastSeenBubbleText = text;
+    // 重置判定状态：基准快照（当前页面已存在的失败文本不归属新步骤）+ 稳定计数
+    _baselineFailSigs = snapshotFailSigs();
+    _lastSettleText = '';
+    _stableCount = 0;
 
     // 记录新一轮 running（按当前项目维度）
     var projectId = getCurrentProjectId();
@@ -269,10 +356,18 @@
     console.log('[STP-DIAG] appendStepLog 已写入 projectId:', projectId);
   }
 
-  // 信号 B：检测失败通知（antd notification / message / 任意新增文本）
+  // 信号 B：检测失败通知（antd notification / message / 任意新增文本 / 对话区错误块）
   function detectFailureNotification() {
     var projectId = getCurrentProjectId();
     if (!projectId) return;
+    // B2：对话区错误块（playground 失败的主要展示位置，优先级高）
+    var errBlock = findNewErrorBlock();
+    if (errBlock) {
+      _handledErrBlockKeys[errBlock.key] = 1;
+      console.log('[STP-DIAG] 捕获对话区错误块:', errBlock.text.slice(0, 80).replace(/\s+/g, ' '));
+      updateLatestRunningStatus(projectId, 'failure');
+      return;
+    }
     var candidates = document.querySelectorAll(
       '.ant-notification-notice, .ant-message-notice, [class*="notification"], [class*="toast"], [class*="message"], [role="alert"]'
     );
@@ -767,6 +862,11 @@
   }
 
   function initLoginTypeBlock() {
+    // 关键：类型单选必须绑定 change 事件，否则选择 CAS/本地登录后角色下拉永不显示
+    var radios = document.getElementsByName('midscene-login-type');
+    for (var ri = 0; ri < radios.length; ri++) {
+      radios[ri].onchange = onLoginTypeChange;
+    }
     setSelectedLoginType('');
     var roleSelect = document.getElementById('midscene-login-role-select');
     if (roleSelect) roleSelect.onchange = onLoginRoleChange;
@@ -1006,7 +1106,7 @@
   }
 
   // ─── Platform API integration ──────────────────────────────
-  var DEFAULT_PLATFORM_URL = 'http://10.3.71.299:8081';
+  var DEFAULT_PLATFORM_URL = 'http://10.3.71.229:8081';
 
   function getPlatformUrl() {
     try {
@@ -1067,9 +1167,11 @@
 
     var stepActions = collectCheckedStepTexts();
 
-    var nlpText = '打开' + testUrl;
-    if (stepActions.length > 0) {
-      nlpText += '，' + stepActions.join('，');
+    // 登录已抽象为登录角色（loginMethodId）传递，网址走独立字段 targetUrl——
+    // 不拼进 NLP 文本（与平台逻辑一致：NLP 只承载业务步骤）
+    var nlpText = stepActions.join('\n');
+    if (!nlpText) {
+      return { success: false, error: '请至少选择一个测试步骤' };
     }
 
     setBtnLoading(true);
@@ -1128,7 +1230,8 @@
           directoryId: directoryId,
           loginMethodId: loginMethodId || undefined,
           name: caseName,
-          nlp: nlpText
+          nlp: nlpText,
+          targetUrl: testUrl || undefined
         })
       });
 

@@ -21,6 +21,12 @@ set MYSQL_USER=root
 set MYSQL_PASS=cib@1234
 set DB_NAME=uitest
 
+rem JDK 11（enforcer 强制要求 [11,12)，安装于 D 盘，勿改用其他版本）
+set JAVA_HOME=D:\jdk-11
+
+rem Maven JVM 堆限制（低内存机器防 malloc 失败，应用堆在各启动命令行单独指定）
+set MAVEN_OPTS=-Xmx256m
+
 rem JWT 密钥（本地开发用，生产环境请修改）
 set JWT_SECRET=stpLocalDevJwtSecret0123456789abcd
 rem 报告上传令牌：必须与 execute-service/.env 中的 REPORT_UPLOAD_TOKEN 保持一致
@@ -108,7 +114,7 @@ echo   [OK] 数据库初始化完成（%TABLE_COUNT% 张表，默认账号 sysadmin / admin123）
 rem ------------------------------ 2. Eureka ------------------------------
 echo.
 echo [2/7] 启动 Eureka 注册中心 :8761 ...
-start "Eureka :8761" cmd /k "cd /d "%~dp0backend" && mvn -pl eureka-server spring-boot:run -DskipTests"
+start "Eureka :8761" cmd /k "cd /d "%~dp0backend" && mvn -pl eureka-server spring-boot:run -DskipTests "-Dspring-boot.run.jvmArguments=-Xmx384m""
 call :WAIT_PORT 8761 120
 if errorlevel 1 (echo   [错误] Eureka 启动超时，请查看 Eureka 窗口日志 & pause & exit /b 1)
 
@@ -117,14 +123,14 @@ echo.
 echo [3/7] 启动 Platform Service :8081 ...
 set SPRING_DATASOURCE_USERNAME=%MYSQL_USER%
 set SPRING_DATASOURCE_PASSWORD=%MYSQL_PASS%
-start "Platform :8081" cmd /k "cd /d "%~dp0backend" && mvn -pl platform-service spring-boot:run -DskipTests"
+start "Platform :8081" cmd /k "cd /d "%~dp0backend" && mvn -pl platform-service spring-boot:run -DskipTests "-Dspring-boot.run.jvmArguments=-Xmx768m""
 call :WAIT_PORT 8081 240
 if errorlevel 1 (echo   [错误] Platform Service 启动超时，请查看其窗口日志 & pause & exit /b 1)
 
 rem ------------------------------ 4. Gateway ------------------------------
 echo.
 echo [4/7] 启动 Gateway 网关 :8080 ...
-start "Gateway :8080" cmd /k "cd /d "%~dp0backend" && mvn -pl gateway-service spring-boot:run -DskipTests"
+start "Gateway :8080" cmd /k "cd /d "%~dp0backend" && mvn -pl gateway-service spring-boot:run -DskipTests "-Dspring-boot.run.jvmArguments=-Xmx384m""
 call :WAIT_PORT 8080 120
 if errorlevel 1 (echo   [错误] Gateway 启动超时，请查看其窗口日志 & pause & exit /b 1)
 

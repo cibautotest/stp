@@ -38,19 +38,27 @@ public class YamlGeneratorService {
 
     /**
      * Midscene YAML 生成的系统提示词
-     * 含缓存标记规则：动态步骤（[动态] 标记、图形验证码、日期、随机值等）输出 cacheable: false
+     * 职责：①把口语化/非标准步骤标准化为清晰分步 ②登录步骤独立 task ③动态值自动识别并标记不可缓存
      */
     private static final String YAML_SYSTEM_PROMPT =
             "You generate executable Midscene YAML. Return ONLY valid YAML, without markdown fences. " +
             "Include web.url if the instruction contains a URL. Include exactly one tasks item and a flow of Midscene actions " +
             "(ai, aiTap, aiInput, aiAssert, aiWaitFor, aiScroll, aiHover, sleep). Preserve the user's intent exactly.\n" +
+            "步骤标准化规则（重要）：\n" +
+            "1. 用户的输入可能是口语化、多个动作混在一句的非标准描述。你必须先在心里将其拆解为清晰的标准化步骤序列，再逐一生成 YAML 动作。\n" +
+            "2. 每个动作只表达一件事（打开页面/输入X到Y/点击Z/断言A）。模糊指代（如“点击那个按钮”）按上下文推断为具体元素名。\n" +
+            "文件操作步骤（自定义，非标准 ai 动作）：\n" +
+            "1. 上传文件：- uploadFile: 上传按钮或控件描述\n    file: 文件的完整路径（如 C:\\\\test\\\\demo.pdf）\n" +
+            "2. 下载文件：- downloadFile: 下载按钮或链接描述\n    file: 保存文件名（可省略，默认用服务器文件名）\n" +
+            "3. 断言文件：- assertFile: 文件名（下载目录内）或完整路径\n    contains: 需要包含的文本（可选）\n    titleContains: 文件名需要包含的片段（可选）\n" +
+            "4. 上传/下载/断言文件步骤必须放在 flow 中与其他步骤并列，保持执行顺序（先点击下载再断言）。\n" +
             "任务拆分规则（重要）：\n" +
             "1. 若输入内容包含登录步骤（打开登录页、输入登录名/账号、输入密码、验证码处理、点击登录按钮），必须将这些步骤放在一个 name 为「登录」的独立 task 中。\n" +
             "2. 登录之后的业务步骤放在后续 task 中（一个或多个）。\n" +
             "3. 若输入内容不包含登录步骤，正常生成业务 task 即可。\n" +
             "缓存标记规则（重要）：\n" +
             "1. 默认所有步骤都走缓存（不写 cacheable，默认 true）。\n" +
-            "2. 若某一步被用户标记为 [动态]，或其内容每次执行都不同（图形验证码、滑块、短信验证码、当前日期/时间、随机数、一次性令牌、每次不同的数据），必须在该步骤上添加：cacheable: false\n" +
+            "2. 若某一步被用户标记为 [动态]，或其内容每次执行都会变化（图形验证码、滑块、短信验证码、当前日期/时间、随机数、一次性令牌、每次不同的数据），必须在该步骤上添加：cacheable: false。即使未标记，你也要主动识别此类动态内容。\n" +
             "3. 若某一步的内容固定不变（固定账号、固定密码、固定菜单名、固定按钮、固定查询词），不要添加 cacheable。\n" +
             "4. 断言/查询类步骤（aiAssert / aiQuery / aiBoolean）本身永不缓存，无需标记。\n" +
             "5. 用户步骤中的 [动态] 标记只用于判定缓存，不要保留在最终 YAML 的 prompt 文本里。";
@@ -252,7 +260,9 @@ public class YamlGeneratorService {
             JSONArray messages = new JSONArray();
             JSONObject userMsg = new JSONObject();
             userMsg.set("role", "user");
-            userMsg.set("content", "Classify this step: \"" + segment + "\". Reply with ONLY one JSON: {\"type\":\"ai|aiTap|aiInput|aiAssert|aiWaitFor|aiScroll|aiHover|sleep\",\"prompt\":\"...\"} (include \"value\" for aiInput)");
+            userMsg.set("content", "Classify this step: \"" + segment + "\". Reply with ONLY one JSON: " +
+                    "{\"type\":\"ai|aiTap|aiInput|aiAssert|aiWaitFor|aiScroll|aiHover|sleep\",\"prompt\":\"...\",\"dynamic\":true|false} " +
+                    "(include \"value\" for aiInput; set dynamic=true when the step involves captcha/SMS code/current date/random values so it must not be cached)");
             messages.add(userMsg);
             body.set("messages", messages);
             body.set("max_tokens", 200);
@@ -276,6 +286,8 @@ public class YamlGeneratorService {
                 step.setType(item.getStr("type", "ai"));
                 step.setPrompt(item.getStr("prompt", segment));
                 if (item.containsKey("value")) step.setValue(item.getStr("value"));
+                // 动态内容（验证码/日期/随机值）→ 生成 YAML 时输出 cacheable: false
+                if (item.containsKey("dynamic")) step.setDynamic(item.getBool("dynamic"));
                 return step;
             }
         } catch (Exception ignored) {}
@@ -310,6 +322,10 @@ public class YamlGeneratorService {
             // aiInput with value: add value on next line
             if ("aiInput".equals(step.getType()) && step.getValue() != null && !step.getValue().isBlank()) {
                 yaml.append("        value: ").append(escapeYaml(step.getValue())).append("\n");
+            }
+            // 动态步骤（验证码/日期/随机值）→ 不可缓存
+            if (Boolean.TRUE.equals(step.getDynamic())) {
+                yaml.append("        cacheable: false\n");
             }
         }
         return yaml.toString();

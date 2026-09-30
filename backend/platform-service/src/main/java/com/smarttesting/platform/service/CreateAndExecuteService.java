@@ -42,6 +42,9 @@ public class CreateAndExecuteService {
     @Resource
     private LoginMethodService loginMethodService;
 
+    @Resource
+    private NlpStandardizationService nlpStandardizationService;
+
     /**
      * 创建用例并触发异步执行
      *
@@ -49,7 +52,17 @@ public class CreateAndExecuteService {
      * @return caseId 和 executionId
      */
     public CreateAndExecuteResponse createAndExecute(CreateAndExecuteRequest request, Long userId) {
-        // Step 1: 构建 TestCase 并保存
+        // Step 0: NLP 标准化（插件/用户输入的口语化步骤 → 每行一个标准步骤；动态内容打 [动态] 标签，
+        // 执行引擎据此禁用 plan 缓存）。AI 不可用时降级为本地关键词标记，不阻塞创建流程。
+        String rawNlp = request.getNlp();
+        String standardizedNlp = nlpStandardizationService.standardize(rawNlp);
+        if (standardizedNlp != null && !standardizedNlp.isBlank()) {
+            request.setNlp(standardizedNlp);
+            log.info("[CreateAndExecute] NLP 已标准化（{} 字符 → {} 字符）",
+                    rawNlp == null ? 0 : rawNlp.length(), standardizedNlp.length());
+        }
+
+        // Step 1: 构建 TestCase 并保存（保存标准化后的 NLP，用例详情/报告呈现标准步骤）
         TestCase testCase = new TestCase();
         testCase.setProjectId(request.getProjectId());
         testCase.setDirectoryId(request.getDirectoryId());
@@ -81,6 +94,10 @@ public class CreateAndExecuteService {
         }
         executeRequest.setYamlScript(yamlScript);
         executeRequest.setExecutionMode(mode);
+        // 插件同步：目标网址走独立字段（不拼进 NLP；执行引擎登录后先导航到该地址再执行业务步骤）
+        if (request.getTargetUrl() != null && !request.getTargetUrl().isBlank()) {
+            executeRequest.setTargetUrl(request.getTargetUrl().trim());
+        }
         projectExecutionSettingsService.apply(request.getProjectId(), executeRequest);
 
         // 登录方式：非免登录时注入登录负载（存量用例无 loginMethodId 时按免登录兼容）

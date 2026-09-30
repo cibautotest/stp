@@ -13,7 +13,7 @@
   'use strict';
 
   // ─── Platform URL ──────────────────────────────────────────
-  var DEFAULT_PLATFORM_URL = 'http://10.3.71.299:8081';
+  var DEFAULT_PLATFORM_URL = 'http://10.3.71.229:8081';
 
   function getPlatformUrl() {
     try {

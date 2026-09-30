@@ -104,28 +104,34 @@ public class CaseExecutionService {
         request.setName(name);
         request.setNlp(testCase.getNlp());
         request.setYamlScript(yamlScript);
+
+        // 登录方式：非免登录时注入登录负载（执行已有用例同样需要登录阶段，否则 NLP 模式浏览器停在空白页）
+        LoginMethod loginMethod = null;
+        if (testCase.getLoginMethodId() != null && !testCase.getLoginMethodId().isBlank()) {
+            loginMethod = loginMethodService.getById(testCase.getLoginMethodId());
+            if (loginMethod != null && !"none".equals(loginMethod.getType())) {
+                ExecuteRequest.LoginMethodPayload payload = new ExecuteRequest.LoginMethodPayload();
+                payload.setId(loginMethod.getId());
+                payload.setType(loginMethod.getType());
+                payload.setLoginUrl(loginMethod.getLoginUrl());
+                payload.setUsername(loginMethod.getUsername());
+                payload.setPassword(loginMethod.getPassword());
+                payload.setStepsNlp(loginMethod.getStepsNlp());
+                payload.setYamlScript(loginMethod.getYamlScript());
+                request.setLoginMethod(payload);
+                log.info("[CaseExecution] Login method injected: id={}, type={}", loginMethod.getId(), loginMethod.getType());
+                // 存量用例兼容：nlp 中若残留旧的登录前缀（"打开 xxx，输入登录名 xxx，密码 xxx…"），剥离后再下发
+                // （登录由登录方式阶段独立执行，业务 NLP 重复登录会导致页面上下文错乱）
+                if (request.getNlp() != null) {
+                    request.setNlp(stripLegacyLoginPrefix(request.getNlp(), loginMethod));
+                }
+            }
+        }
         request.setExecutionMode(mode);
         request.setTimeout(600 * 1000);
         request.setHeadless(headless != null ? headless : true);
         request.setCacheContent(testCase.getCacheContent());
         projectExecutionSettingsService.apply(testCase.getProjectId(), request);
-
-        // 登录方式：非免登录时注入登录负载（执行已有用例同样需要登录阶段，否则 NLP 模式浏览器停在空白页）
-        if (testCase.getLoginMethodId() != null && !testCase.getLoginMethodId().isBlank()) {
-            LoginMethod lm = loginMethodService.getById(testCase.getLoginMethodId());
-            if (lm != null && !"none".equals(lm.getType())) {
-                ExecuteRequest.LoginMethodPayload payload = new ExecuteRequest.LoginMethodPayload();
-                payload.setId(lm.getId());
-                payload.setType(lm.getType());
-                payload.setLoginUrl(lm.getLoginUrl());
-                payload.setUsername(lm.getUsername());
-                payload.setPassword(lm.getPassword());
-                payload.setStepsNlp(lm.getStepsNlp());
-                payload.setYamlScript(lm.getYamlScript());
-                request.setLoginMethod(payload);
-                log.info("[CaseExecution] Login method injected: id={}, type={}", lm.getId(), lm.getType());
-            }
-        }
 
         // NLP 模式目标网址：从 YAML 中提取 web.url（NLP 本身不含网址时，执行引擎先导航再执行步骤）
         if ("NLP".equals(mode)) {
@@ -166,6 +172,26 @@ public class CaseExecutionService {
         record.setUpdatedAt(LocalDateTime.now());
         executionRecordMapper.insert(record);
         log.info("[CaseExecution] ExecutionRecord created: caseId={}, executionId={}", caseId, executionId);
+    }
+
+    /**
+     * 剥离存量用例 nlp 中残留的登录前缀（旧版会把登录方式策略生成的 NLP 拼在业务步骤前）。
+     * 匹配首段：打开 <url>，输入登录名 <账号>，密码 <密码>…（含补充步骤），剥离后返回纯业务步骤。
+     */
+    private String stripLegacyLoginPrefix(String nlp, LoginMethod lm) {
+        if (nlp == null || nlp.isBlank() || lm.getUsername() == null) return nlp;
+        String[] lines = nlp.split("\n", 2);
+        String firstLine = lines[0].trim();
+        boolean isLegacyLoginPrefix =
+                firstLine.startsWith("打开") &&
+                firstLine.contains("输入登录名") &&
+                firstLine.contains(lm.getUsername());
+        if (isLegacyLoginPrefix) {
+            String rest = lines.length > 1 ? lines[1].trim() : "";
+            log.info("[CaseExecution] 已剥离 nlp 中残留的登录前缀（登录由登录方式阶段执行）");
+            return rest;
+        }
+        return nlp;
     }
 
     /**

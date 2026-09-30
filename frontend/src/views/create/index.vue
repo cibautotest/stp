@@ -245,17 +245,6 @@ const extraStepsToNlp = (steps: ExtraStep[]): string => {
     .join('\n')
 }
 
-// 策略生成登录 NLP：打开url，输入登录名xxx，密码xxx，补充步骤xxxx
-const buildLoginNlp = (m?: LoginMethod): string => {
-  if (!m || !m.loginUrl) return ''
-  let nlp = `打开 ${m.loginUrl}，输入登录名 ${m.username}，密码 ${m.password}`
-  if (m.stepsNlp) {
-    const extra = m.stepsNlp.split('\n').map(s => s.replace(/^\[动态\]\s*/, '').trim()).filter(Boolean)
-    if (extra.length > 0) nlp += '，' + extra.join('，')
-  }
-  return nlp
-}
-
 const savingLogin = ref(false)
 
 // 校验新建登录账号表单，返回错误信息（null 表示通过）
@@ -373,9 +362,15 @@ const nlpToYaml = async (nlp: string, presetUrl?: string): Promise<string> => {
       yaml += `  - name: AI 测试\n`
       yaml += `    flow:\n`
       steps.forEach((step: any) => {
-        yaml += `      - ${step.type}: ${step.prompt}\n`
+        // prompt 内含动态标签（【动态】/[动态]）或 AI 判定 dynamic → 该步骤不可缓存
+        const hasTag = typeof step.prompt === 'string' && /^[【\[]动态[】\]]/.test(step.prompt.trim())
+        const prompt = hasTag ? step.prompt.trim().replace(/^[【\[]动态[】\]]\s*/, '') : step.prompt
+        yaml += `      - ${step.type}: ${prompt}\n`
         if (step.type === 'aiInput' && step.value) {
           yaml += `        value: ${step.value}\n`
+        }
+        if (step.dynamic || hasTag) {
+          yaml += `        cacheable: false\n`
         }
       })
       return yaml
@@ -392,10 +387,14 @@ const nlpToYaml = async (nlp: string, presetUrl?: string): Promise<string> => {
   if (lines.length === 0) return ''
 
   lines.forEach(line => {
-    const taskName = line.length > 30 ? line.substring(0, 30) + '...' : line
+    // 动态标签识别：【动态】/ [动态] 前缀 → 该步骤 cacheable: false（验证码/日期/随机值等永不走缓存）
+    const dynamic = /^[【\[]动态[】\]]/.test(line)
+    const prompt = dynamic ? line.replace(/^[【\[]动态[】\]]\s*/, '') : line
+    const taskName = prompt.length > 30 ? prompt.substring(0, 30) + '...' : prompt
     yaml += `  - name: ${taskName}\n`
     yaml += `    flow:\n`
-    yaml += `      - ai: ${line}\n`
+    yaml += `      - ai: ${prompt}\n`
+    if (dynamic) yaml += `        cacheable: false\n`
   })
   return yaml
 }
@@ -409,18 +408,14 @@ const syncNlpToYaml = async () => {
   }
 }
 
-// 合并登录 NLP（策略生成）与业务步骤 NLP，供智能生成 YAML 使用（幂等：已含登录前缀时不重复拼）
+// 供智能生成 YAML / 调试使用的 NLP（登录不拼接——登录由用例绑定的登录方式在执行阶段独立完成）
 const mergeNlpForGeneration = (businessNlp: string): string => {
   const nlp = businessNlp.trim()
+  // 免登录：注入目标网址（确保 AI 生成 web.url，且执行时能导航）
   if (loginType.value === 'none') {
     const url = noneUrl.value.trim()
     if (!url) return nlp
     return nlp.startsWith(`打开 ${url}`) ? nlp : `打开 ${url}\n${nlp}`
-  }
-  if (loginType.value && loginType.value !== 'none') {
-    const loginNlp = buildLoginNlp(currentLoginMethod.value)
-    if (!loginNlp) return nlp
-    return nlp.startsWith(loginNlp) ? nlp : `${loginNlp}\n${nlp}`
   }
   return nlp
 }
@@ -436,6 +431,20 @@ const generateScript = async (nlp = generatorNlp.value) => {
     const yaml = await streamNlpToYaml(merged.trim(), chunk => { streamedScript.value += chunk }, reasoning => { streamedReasoning.value += reasoning })
     streamedScript.value = yaml
   } catch (e: any) { ElMessage.error(e.message || '脚本生成失败') } finally { generatingScript.value = false }
+}
+
+// 将目标网址注入 YAML 的 web.url（免登录时确保打开用户填写的网址，而非编辑器模板默认的 baidu）
+const injectUrlToYaml = (yamlContent: string, url: string): string => {
+  if (!url.trim()) return yamlContent
+  try {
+    const doc = yamlLib.load(yamlContent) as any
+    if (doc && typeof doc === 'object') {
+      doc.web = doc.web || {}
+      doc.web.url = url.trim()
+      return yamlLib.dump(doc)
+    }
+  } catch { /* 解析失败走兜底 */ }
+  return `web:\n  url: ${url.trim()}\ntasks:\n  - name: AI 测试\n    flow: []\n`
 }
 
 // 执行时剔除 YAML 中的登录 task（登录阶段由登录方式独立缓存执行，避免重复登录）
@@ -465,21 +474,19 @@ const handleGenerateScript = async () => {
   return generateScript()
 }
 
-// 从合并 NLP 中剥离登录前缀（回写业务区时保持业务步骤纯度，避免执行时与登录阶段重复）
-const stripLoginNlpPrefix = (mergedNlp: string): string => {
+// 回写业务区时剥离免登录网址前缀（保持业务步骤纯度；网址由 web.url 注入承载）
+const stripUrlPrefix = (mergedNlp: string): string => {
   const nlp = mergedNlp.trim()
   if (loginType.value === 'none') {
     const url = noneUrl.value.trim()
     const prefix = `打开 ${url}`
     return url && nlp.startsWith(prefix) ? nlp.slice(prefix.length).trim() : nlp
   }
-  const loginNlp = buildLoginNlp(currentLoginMethod.value)
-  if (loginNlp && nlp.startsWith(loginNlp)) return nlp.slice(loginNlp.length).trim()
   return nlp
 }
 
 const confirmGeneratedScript = ({ nlp, yaml }: { nlp: string; yaml: string }) => {
-  nlpInstruction.value = stripLoginNlpPrefix(nlp)
+  nlpInstruction.value = stripUrlPrefix(nlp)
   yamlContent.value = yaml
   yamlEditorRef.value?.loadFromYaml(yaml)
   streamDialog.value = false
@@ -595,7 +602,8 @@ const handleCreateCase = async () => {
       name: caseName.value.trim(),
       description: caseDescription.value.trim() || undefined,
       nlp: nlpInstruction.value.trim(),
-      yamlFlow: yaml
+      // 免登录：把用户填写的目标网址写入 web.url（否则执行已有用例时打开的是模板默认的 baidu）
+      yamlFlow: loginType.value === 'none' ? injectUrlToYaml(yaml, noneUrl.value) : yaml
     })
     if (!created) throw new Error('创建测试用例失败')
     ElMessage.success('测试用例创建成功')
@@ -631,8 +639,8 @@ const handleExecuteAndSave = async () => {
         description: caseDescription.value.trim() || undefined,
         // 免登录：NLP 需带目标网址（否则 NLP 模式不导航）；CAS/本地：保持业务步骤（登录由登录方式阶段处理）
         nlp: loginType.value === 'none' ? mergeNlpForGeneration(nlpInstruction.value) : nlpInstruction.value,
-        // 非免登录时剔除 YAML 中的登录 task（登录由登录方式独立缓存执行）
-        customYaml: loginMethodId ? stripLoginTask(yamlContent.value) : yamlContent.value,
+        // 非免登录时剔除 YAML 中的登录 task（登录由登录方式独立缓存执行）；免登录时注入目标网址到 web.url
+        customYaml: loginMethodId ? stripLoginTask(yamlContent.value) : injectUrlToYaml(yamlContent.value, noneUrl.value),
         executionMode: executionMode.value,
         headless: configStore.aiConfig.browserMode === 'headless'
       },
