@@ -12,6 +12,8 @@ export const saveAIConfig = (data: {
   modelName: string
   modelFamily: string
   browserHeadless: boolean
+  /** CODE 执行步骤截图模式：ERROR=仅失败/AI兜底步骤（默认），ALL=全步骤截图 */
+  codeScreenshotMode?: 'ERROR' | 'ALL'
 }) => {
   return request.post<{ success: boolean }>('/config', data)
 }

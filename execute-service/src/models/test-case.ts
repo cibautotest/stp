@@ -8,9 +8,26 @@ export interface TestCaseInput {
   timeout?: number;
   headless?: boolean;
   cacheContent?: string;
-  executionMode?: 'NLP' | 'YAML';
+  executionMode?: 'NLP' | 'YAML' | 'CODE';
+  /** CODE 模式：执行机直接运行的录制脚本（async function run(stp) 形态） */
+  script?: string;
+  /** CODE 模式步骤截图模式：ERROR=仅失败/AI兜底步骤（默认），ALL=全步骤截图 */
+  screenshotMode?: 'ERROR' | 'ALL';
   trafficTaggingEnabled?: boolean;
   kafkaConfig?: KafkaConfig;
+  loginMethod?: LoginMethodPayload;
+  targetUrl?: string;
+}
+
+// 登录方式负载（type != none 时执行登录阶段，独立缓存 ID：login_{id}）
+export interface LoginMethodPayload {
+  id: string;
+  type: 'none' | 'cas' | 'local';
+  loginUrl?: string;
+  username?: string;
+  password?: string;
+  stepsNlp?: string;
+  yamlScript?: string;
 }
 
 export interface KafkaConfig {

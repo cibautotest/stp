@@ -9,7 +9,8 @@ export const useConfigStore = defineStore('config', () => {
     apiKey: '',
     modelName: '',
     modelFamily: '',
-    browserMode: 'headless'
+    browserMode: 'headless',
+    codeScreenshotMode: 'ERROR'
   })
   const loading = ref(false)
 
@@ -23,7 +24,8 @@ export const useConfigStore = defineStore('config', () => {
           apiKey: (res as any).apiKey || '',
           modelName: (res as any).modelName || '',
           modelFamily: (res as any).modelFamily || '',
-          browserMode: (res as any).browserHeadless === false ? 'headful' : 'headless'
+          browserMode: (res as any).browserHeadless === false ? 'headful' : 'headless',
+          codeScreenshotMode: (res as any).codeScreenshotMode === 'ALL' ? 'ALL' : 'ERROR'
         }
       }
     } catch (error) {
@@ -40,7 +42,8 @@ export const useConfigStore = defineStore('config', () => {
         apiKey: config.apiKey,
         modelName: config.modelName,
         modelFamily: config.modelFamily,
-        browserHeadless: config.browserMode === 'headless'
+        browserHeadless: config.browserMode === 'headless',
+        codeScreenshotMode: config.codeScreenshotMode === 'ALL' ? 'ALL' : 'ERROR'
       })
       aiConfig.value = { ...config }
       return true
@@ -58,7 +61,8 @@ export const useConfigStore = defineStore('config', () => {
         apiKey: config.apiKey,
         modelName: config.modelName,
         modelFamily: config.modelFamily,
-        browserHeadless: mode === 'headless'
+        browserHeadless: mode === 'headless',
+        codeScreenshotMode: config.codeScreenshotMode === 'ALL' ? 'ALL' : 'ERROR'
       })
       aiConfig.value = { ...config, browserMode: mode }
       return true

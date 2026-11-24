@@ -18,6 +18,7 @@ import { statusRoutes } from './routes/status.js';
 import { cancelRoutes } from './routes/cancel.js';
 import { mergeRoutes } from './routes/merge.js';
 import { healthRoutes } from './routes/health.js';
+import { cacheRoutes } from './routes/cache.js';
 
 export async function createServer(
   orchestrator: Orchestrator,
@@ -80,8 +81,11 @@ export async function createServer(
   await healthRoutes(server);
   await syncRoutes(server as any, orchestrator);
   await asyncRoutes(server as any, orchestrator);
+  const { localFileRoutes } = await import('./routes/local-file.js');
+  await localFileRoutes(server as any);
   await statusRoutes(server, orchestrator);
   await cancelRoutes(server, orchestrator);
+  await cacheRoutes(server);
   await mergeRoutes(server, reportManager, store);
   await sseManager.register(server);
 

@@ -33,6 +33,10 @@ public class TestCase {
     @Schema(description = "Directory ID", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 64)
     private String directoryId;
 
+    @Size(max = 64, message = "loginMethodId length must be at most 64")
+    @Schema(description = "Reusable login method ID (empty means no login)", maxLength = 64)
+    private String loginMethodId;
+
     @NotBlank(message = "name is required")
     @Size(max = 100, message = "name length must be at most 100")
     @Schema(description = "Case name", example = "Baidu search test", requiredMode = Schema.RequiredMode.REQUIRED, maxLength = 100)
@@ -51,13 +55,24 @@ public class TestCase {
     @Schema(description = "YAML flow definition", maxLength = 200000)
     private String yamlFlow;
 
-    @Pattern(regexp = "NLP|YAML|nlp|yaml", message = "executionMode must be NLP or YAML")
-    @Schema(description = "Execution mode", allowableValues = {"NLP", "YAML"})
+    @Pattern(regexp = "NLP|YAML|CODE|nlp|yaml|code", message = "executionMode must be NLP, YAML or CODE")
+    @Schema(description = "Execution mode", allowableValues = {"NLP", "YAML", "CODE"})
     private String executionMode;
 
     @Size(max = 200000, message = "script length must be at most 200000")
-    @Schema(description = "Generated test script", maxLength = 200000)
+    @Schema(description = "Recorded Playwright TypeScript script (async function run(stp)), only for CODE mode", maxLength = 200000)
     private String script;
+
+    @Pattern(regexp = "NONE|RECORDED|STALE|none|recorded|stale", message = "scriptStatus is invalid")
+    @Schema(description = "Recorded script status: NONE / RECORDED / STALE", allowableValues = {"NONE", "RECORDED", "STALE"})
+    private String scriptStatus;
+
+    @Size(max = 64, message = "scriptSourceExecutionId length must be at most 64")
+    @Schema(description = "Source execution ID that produced the recorded script", maxLength = 64)
+    private String scriptSourceExecutionId;
+
+    @Schema(description = "Recorded time of the Playwright script")
+    private LocalDateTime scriptRecordedAt;
 
     @Size(max = 1000, message = "url length must be at most 1000")
     @Schema(description = "Target page URL", maxLength = 1000)

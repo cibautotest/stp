@@ -11,10 +11,31 @@ export const getCaseDirectories = (projectId: string) => request.get<CaseDirecto
 export const createCaseDirectory = (data: { projectId: string; parentId?: string; name: string }) => request.post<CaseDirectory>('/platform/case-directories', data)
 export const deleteCaseDirectory = (id: string) => request.delete(`/platform/case-directories/${encodeURIComponent(id)}`)
 
+// ── 登录方式（按项目维度，跨用例复用） ──
+export type LoginMethodType = 'none' | 'cas' | 'local'
+export interface LoginMethod {
+  id: string
+  projectId: string
+  name: string
+  type: LoginMethodType
+  loginUrl?: string
+  roleName?: string
+  username?: string
+  password?: string
+  stepsNlp?: string
+  yamlScript?: string
+  cacheStatus?: 'uncached' | 'cached'
+}
+export const getLoginMethods = (projectId: string) => request.get<LoginMethod[]>('/platform/login-methods', { params: { projectId } })
+export const createLoginMethod = (data: Omit<LoginMethod, 'id' | 'cacheStatus'>) => request.post<LoginMethod>('/platform/login-methods', data)
+export const updateLoginMethod = (id: string, data: Partial<LoginMethod>) => request.put<LoginMethod>(`/platform/login-methods/${encodeURIComponent(id)}`, data)
+export const deleteLoginMethod = (id: string) => request.delete(`/platform/login-methods/${encodeURIComponent(id)}`)
+
 // 创建用例 - 与后端 TestCase 实体匹配
 export const createCase = (data: {
   projectId: string
   directoryId: string
+  loginMethodId?: string
   name: string
   description?: string
   nlp: string
@@ -35,7 +56,7 @@ export const deleteCase = (id: string) => {
 }
 
 // 执行已有用例 - 调用 POST /api/platform/execute/cases/{id}
-export type ExecutionMode = 'NLP' | 'YAML'
+export type ExecutionMode = 'NLP' | 'YAML' | 'CODE'
 export const executeCase = (id: string, customYaml?: string, headless?: boolean, executionMode: ExecutionMode = 'NLP') => {
   return request.post<{ caseId: string; executionId: string }>(`/platform/execute/cases/${encodeURIComponent(id)}`, {
     customYaml: customYaml || '',
@@ -50,9 +71,37 @@ export const getCase = (id: string) => {
 }
 export const getCaseCache = (id: string) => request.get<string>(`/platform/cases/${encodeURIComponent(id)}/cache`, { responseType: 'text' })
 
+// 最终下发执行机的 Midscene 脚本预览（后端按执行链路组装：剔除登录 task / 剥离登录前缀 / 提取 targetUrl / 登录 YAML 模板）
+export interface FinalScriptPreview {
+  executionMode: ExecutionMode
+  yamlScript?: string
+  nlp?: string
+  script?: string
+  scriptStatus?: 'NONE' | 'RECORDED' | 'STALE'
+  targetUrl?: string
+  headless?: boolean
+  timeout?: number
+  loginMethod?: {
+    id: string
+    type: LoginMethodType
+    loginUrl?: string
+    username?: string
+    password?: string
+    stepsNlp?: string
+    yamlScript?: string
+  }
+  loginYamlPreview?: string
+  warnings?: string[]
+}
+export const getFinalScript = (id: string) => request.get<FinalScriptPreview>(`/platform/cases/${encodeURIComponent(id)}/final-script`)
+// 批量标准化项目下存量用例的 NLP 步骤说明
+export const standardizeBatch = (projectId: string) => request.post<{ total: number; changed: number; failed: number }>('/platform/cases/standardize-batch', null, { params: { projectId } })
+
 // 创建用例并异步执行
 export const createAndExecute = (data: {
   projectId: string
+  directoryId: string
+  loginMethodId?: string
   name: string
   description?: string
   nlp: string
@@ -84,6 +133,7 @@ export interface ActionStep {
   type: string
   prompt: string
   value?: string
+  dynamic?: boolean // 动态内容（验证码/日期/随机值等）→ 生成 YAML 时输出 cacheable: false
 }
 export const nlpToActions = (nlp: string) => {
   return request.post<ActionStep[]>('/platform/cases/nlp-to-actions', { nlp })

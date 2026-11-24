@@ -5,8 +5,6 @@ import com.smarttesting.platform.entity.ExecutionRecord;
 import com.smarttesting.platform.entity.Report;
 import com.smarttesting.platform.entity.TestCase;
 import com.smarttesting.platform.mapper.ExecutionRecordMapper;
-import com.smarttesting.platform.mapper.ApiExchangeMapper;
-import com.smarttesting.platform.mapper.ReportMapper;
 import com.smarttesting.platform.mapper.TestCaseMapper;
 import com.smarttesting.platform.model.ExecuteStatusResponse;
 import org.slf4j.Logger;
@@ -48,10 +46,7 @@ public class ExecutionStatusSyncService {
     private TestCaseMapper testCaseMapper;
 
     @Resource
-    private ReportMapper reportMapper;
-
-    @Resource
-    private ApiExchangeMapper apiExchangeMapper;
+    private ExecutionReportService executionReportService;
 
     @Resource
     private ExecuteServiceGateway executeServiceGateway;
@@ -192,8 +187,7 @@ public class ExecutionStatusSyncService {
         }
 
         report.setCreatedAt(LocalDateTime.now());
-        reportMapper.insert(report);
-        apiExchangeMapper.updateReportIdByExecutionId(record.getExecutionId(), report.getId());
+        executionReportService.upsertSingleReport(report, record.getExecutionId());
 
         log.info("[ExecutionStatusSync] Execution completed: caseId={}, status={}", caseId, mappedStatus);
     }

@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "chcp 65001 && node dist/index.js"
+    "start": "chcp 65001 && node dist/index.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
@@ -28,13 +29,14 @@
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
-    "@midscene/core": "^1.12.1",
-    "@midscene/web": "^1.12.1",
+    "@midscene/core": "1.12.2",
+    "@midscene/web": "1.12.2",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.0",
     "@types/node-cron": "^3.0.11",
     "@types/ws": "^8.18.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^5.0.2"
   }
 }

@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 import javax.validation.constraints.NotBlank;
+import javax.validation.constraints.Pattern;
 import javax.validation.constraints.Size;
 import java.time.LocalDateTime;
 
@@ -40,6 +41,10 @@ public class AiConfig {
 
     @Schema(description = "Whether browser runs in headless mode")
     private Boolean browserHeadless;
+
+    @Pattern(regexp = "ERROR|ALL|error|all", message = "codeScreenshotMode must be ERROR or ALL")
+    @Schema(description = "CODE execution screenshot mode: ERROR (failed/AI-fallback steps only, default) or ALL (every step)", allowableValues = {"ERROR", "ALL"})
+    private String codeScreenshotMode;
 
     @TableField(fill = FieldFill.INSERT)
     @Schema(description = "Created time")

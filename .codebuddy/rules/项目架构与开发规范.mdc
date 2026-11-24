@@ -1,0 +1,74 @@
+---
+description: 智能测试中台（STP）全栈架构地图、各层编码约定、执行语义、环境操作与排障手册
+alwaysApply: true
+enabled: true
+provider: 
+---
+
+# 智能测试中台（STP）架构与开发规范
+
+## 一、服务拓扑（端口是硬约定，改代码前先对齐）
+
+```
+前端 Vue3+Vite :3000 → 网关 :8080 → platform-service :8081（Eureka :8761）
+                                  → execute-service :3001（Node+TS+Playwright+Midscene）
+MySQL uitest :3306 · Kafka :9092（可选，接口报文观测）
+Chrome 插件：测试用例可视化插件-v1.92（MV3，原生 JS，无构建）
+```
+
+- **execute-service 必须跑在 3001**：`.env` 默认 `PORT=3000` 与前端冲突，已改为 3001，禁止回退。报告地址 `REPORT_BASE_URL` 同步为 `http://localhost:3001/reports`。
+- 平台侧通过 `users/projects.execute_service_url` 解析执行机地址，改端口要同步 DB 配置。
+- 登录方式测试地址指向平台自身前端（如 `http://localhost:3000/#/login`）时，注意 3000 上跑的必须是前端而非执行引擎。
+
+## 二、后端约定（backend/platform-service，`com.smarttesting.platform`）
+
+- 分层：`controller/`（校验+响应，禁业务逻辑）→ `service/`（**本仓库实际约定为 @Service 具体类 + @Resource 注入**，非接口+impl）→ `mapper/`（extends `BaseMapper<T>`，MyBatis-Plus）→ `entity/`（`@TableName @Data`）→ `model/`（DTO/请求响应对象）。
+- 入参校验：`@Valid` + `@NotBlank/@Size`（含 maxLength 说明）；表均带 `deleted` 逻辑删除字段，查询注意过滤。
+- SQL 迁移：新增 `src/main/resources/sql/V<yyyyMMdd>__<desc>.sql`。**文件含 BOM 会导致 mysql source 报语法错误**，执行前用 node 脚本去 BOM 写临时文件再 source（参考 start-platform.bat 的初始化方式）。
+- 免鉴权回调（如执行引擎回写缓存状态）：在 `security/SecurityConfig.java` 白名单加路径，模式参考 `/api/platform/internal/**`。
+- 编译验证：`cd backend; mvn -q -pl platform-service -am compile -DskipTests`。
+
+## 三、执行引擎约定（execute-service/src）
+
+- 请求字段新增必须**四层同步**，漏一层就静默丢失：
+  1. `models/test-case.ts` → `TestCaseInput`
+  2. `queue/interface.ts` → `QueueTask`
+  3. `core/orchestrator.ts` → **两处** enqueue 调用透传
+  4. `core/worker.ts` → 解构后传给 `yaml-runner.run/runNlp`
+- 登录阶段语义（勿破坏）：
+  - `loginMethod.type !== 'none'` 时先跑登录阶段：独立缓存 id `login_{methodId}`、`generateReport:false`、同一 page 继续业务步骤、成功后回调平台 `cache-status`。
+  - 登录 YAML 模板中 `[动态]` 前缀的步骤 → `cacheable: false`（验证码/日期/随机值等）；末尾带 `aiWaitFor 登录完成`（查询类天然不缓存）。
+  - 业务 YAML 的 `web.url` 与登录页相同（规范化比较）时跳过重复导航，防跳回登录页。
+- 编译验证：`cd execute-service; npx tsc`。dev 模式 tsx watch 热加载；`node dist/index.js` 模式需重新 build。
+
+## 四、前端约定（frontend/src）
+
+- Vue3 `<script setup>` + TS + Element Plus + Pinia。`api/*.ts` 只做 request 薄封装，`stores/*.ts` 调 api。
+- **部分视图是压缩单行风格**（如 `views/cases/index.vue` 全文一行）：只用 `replace_in_file` 精准替换，**禁止整文件格式化重排**。
+- 验证：`read_lints`（改动文件）。
+
+## 五、插件约定（测试用例可视化插件-v1.92）
+
+- 原生 JS（ES5 风格：`var`/`function`），无构建，`window` 全局挂载（如 `MidsceneAuth`）。
+- `static/js/*.js` 是第三方构建产物（midscene playground）：改动需写临时 patch 脚本做唯一字符串替换 + `node --check` 验证，**补丁脚本用完即删**。
+- 与平台通信走 `auth.js` 封装的 fetch + Bearer Token；插件端登录方式/目录等表单逻辑与平台创建页保持功能对齐。
+
+## 六、核心业务语义（改动时保持一致）
+
+- **登录方式**：三类型 `none/cas/local`，按项目复用；免登录也要目标网址。新建角色不填名称（自动 `{type}登录-{账号}`，角色名=账号）。缓存状态 `uncached/cached` 由执行引擎首次成功登录后回调更新。
+- **NLP 合并**：生成脚本/调试时把登录 NLP（`打开{url}，输入登录名{x}，密码{y}，{补充步骤}`）拼在业务 NLP 前；确认回写时**剥离登录前缀**保持用例纯度；执行已有用例时后端注入 loginMethod + targetUrl（YAML 模式剔除「登录」task 防重复登录）。
+- **Prompt 规则**：`YamlGeneratorService.YAML_SYSTEM_PROMPT` 统一两处（流式/非流式）；登录步骤独立 `name: 登录` task；`[动态]`/验证码/日期 → `cacheable: false`。
+
+## 七、环境与排障手册（Windows + PowerShell）
+
+- **JDK 11 强制**：enforcer 要求 `[11,12)`，本机 JDK 11 安装在 `D:\jdk-11`（Temurin zip 免安装）。所有 mvn 命令前必须 `$env:JAVA_HOME = "D:\jdk-11"`（系统默认 java 是 17，不设会被 enforcer 拦截）；`start-platform.bat` 已内置该设置。
+- **.bat 文件编码必须保持 GBK**：cmd 按 GBK 解析 bat，编辑工具默认存 UTF-8 会导致中文乱码甚至解析异常。编辑 `.bat` 后必须转回 GBK（`[System.IO.File]::WriteAllText($p, $text, [System.Text.Encoding]::GetEncoding(936))`）；同理 `.sql` 文件注意 BOM 问题。
+- 重启 Platform：杀 8081 进程 → 带 `JAVA_HOME=D:\jdk-11`、`SPRING_DATASOURCE_USERNAME/PASSWORD`、`JWT_SECRET`、`REPORT_UPLOAD_TOKEN` 启动 `mvn -pl platform-service spring-boot:run -DskipTests`，日志重定向 `logs/`。
+- PowerShell 调含中文的 JSON 接口：`Invoke-RestMethod` 的 body 用 `[System.Text.Encoding]::UTF8.GetBytes($json)`，否则 400（误判为代码问题的高发坑）。
+- 排障顺序：端口监听 → `logs/` 服务日志 → DB 数据（mysql.exe 直查）→ 直连 `POST http://localhost:3001/execute/async` 隔离验证执行引擎 → 再怀疑代码。
+- 一键启停：`start-platform.bat` / `start-platform.bat stop`。
+
+## 八、变更纳管与验收
+
+- 功能级修改进 `openspec/changes/<change-name>/`（详见「AI修改纳管位置」规则）。
+- 跨全栈改动完成定义：后端 mvn compile 通过 + execute-service tsc 通过 + 前端 read_lints 零错误 + 关键 API 实测（创建/列表/回调）。

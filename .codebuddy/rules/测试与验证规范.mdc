@@ -1,0 +1,46 @@
+---
+description: 单元测试 red-green 节奏与新功能全流程验收红线
+alwaysApply: true
+enabled: true
+provider: 
+---
+
+# 测试与验证规范
+
+## 一、新功能完成定义（红线，缺一不可）
+
+每个新功能/行为变更，必须从后端到前端**全流程走一遍**才算完成：
+
+1. 后端 `mvn -q -pl platform-service -am compile -DskipTests` 通过；
+2. **API 实测**：新接口/改动的接口用 PowerShell 实际调用（中文 body 用 UTF8 字节），断言响应符合预期；
+3. 执行引擎 `npx tsc` 通过；涉及执行链路的，直连 `POST :3001/execute/async` 冒烟；
+4. 前端改动文件 `read_lints` 零错误；
+5. 端到端：按 `stp-e2e-verify` 技能跑通受影响链路（或派 `e2e-verifier` agent）。
+
+只编译通过不算完成；没跑通的功能交付时必须明说"未验证项"。
+
+## 二、单元测试 red-green（可测纯逻辑必做）
+
+适用对象（满足其一即必须写单测）：
+- 纯函数/策略逻辑：如 YAML 生成策略、`stripLoginTask`、`buildLoginYaml`、NLP 合并/剥离、URL 规范化比较；
+- 复杂分支判断：缓存命中条件、登录方式类型分支、幂等拼接；
+- **Bug 修复**：先写一个复现该 bug 的失败测试（red），再修到通过（green），防回归。
+
+节奏：**red（先写失败测试）→ green（最小实现通过）→ refactor（清理）**。
+
+分层落点：
+- 后端：JUnit 5 + Mockito（Service 测试 Mock Mapper，不连真实库）；首次使用时先补 `spring-boot-starter-test` 依赖；
+- execute-service：Vitest，测 `yaml-runner` 的纯方法（`buildLoginYaml`/`urlsEqual`/`stripLoginTask` 类）与 queue 序列化；
+- 前端：Vitest，测 stores 逻辑与纯工具函数（合并/剥离 NLP 等）。
+
+不适用（不强制）：Controller 薄层、纯 CRUD、视图组件样式、插件 DOM 交互（这些靠第一条的全流程验收覆盖）。
+
+## 三、现状与基建
+
+当前仓库**零测试基建**（后端无 spring-boot-starter-test、引擎/前端无 Vitest）。第一次触发单测要求时，先补最小基建（加依赖 + 一个示例测试），再做 red-green；不为补测试大规模改造既有代码。
+
+## 四、验证证据与 openspec 纳管
+
+- 交付说明中附验证证据：编译退出码、API 实测响应摘要、执行状态轮询结果——不空口说"已完成"；
+- **测试用例、验证证据、验收报告必须存入 `openspec/changes/<change-name>/verification/`**（test-cases.md / evidence.md / report.md），随变更归档，可追溯（目录结构与要求详见「AI修改纳管位置」规则）；
+- 单元测试代码放各层 test 目录；verification/test-cases.md 记录用例清单与覆盖点。

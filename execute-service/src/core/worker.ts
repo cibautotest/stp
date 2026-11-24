@@ -4,12 +4,17 @@ import type { CancelManager } from './cancel-manager.js';
 import type { ExecutionStore } from '../store/execution-store.js';
 import type { ReportManager } from '../reports/manager.js';
 import { YamlRunner } from './yaml-runner.js';
+import { CodeRunner } from './code-runner.js';
+import { CodeRecorder } from '../recorder/code-recorder.js';
+import { releaseCollector } from '../recorder/dump-collector.js';
 import { getConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { ApiExchangeProducer } from '../observability/kafka.js';
 
 export class Worker {
   private runner = new YamlRunner();
+  private codeRunner = new CodeRunner();
+  private codeRecorder = new CodeRecorder();
 
   constructor(
     private progressBus: ProgressBus,
@@ -30,8 +35,12 @@ export class Worker {
       cacheContent,
       reportFileName,
       executionMode,
+      script,
+      screenshotMode,
       trafficTaggingEnabled,
       kafkaConfig,
+      loginMethod,
+      targetUrl,
     } = task;
 
     const isHeadless = headless ?? getConfig().BROWSER_HEADLESS;
@@ -52,10 +61,13 @@ export class Worker {
 
     try {
       executionProducer = await ApiExchangeProducer.create(this.kafkaConfigForExecution(kafkaConfig, executionId));
+      const effectiveMode = executionMode ?? 'NLP';
       const result = await this.withTimeout(
-        executionMode === 'YAML'
-          ? this.runner.run(executionId, caseId, yamlScript, isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled)
-          : this.runner.runNlp(executionId, caseId, nlp, isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled),
+        effectiveMode === 'CODE'
+          ? this.codeRunner.run(executionId, caseId, name, script || '', isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled, loginMethod, targetUrl, screenshotMode)
+          : effectiveMode === 'YAML'
+            ? this.runner.run(executionId, caseId, yamlScript, isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled, loginMethod)
+            : this.runner.runNlp(executionId, caseId, nlp, isHeadless, this.progressBus, this.cancelManager, cacheContent, reportFileName, executionProducer, trafficTaggingEnabled, loginMethod, targetUrl),
         timeout,
       );
       await executionProducer?.stop();
@@ -64,6 +76,12 @@ export class Worker {
       const duration = Date.now() - startTime;
       const reportUrl = await this.uploadReportIfPresent(executionId, reportFileName);
       await this.uploadCacheIfPresent(caseId);
+
+      // 录制：NLP/YAML 执行成功后生成 Playwright 重放脚本并上传平台（关联用例）
+      if (result.status === 'completed' && (effectiveMode === 'NLP' || effectiveMode === 'YAML')) {
+        await this.recordAndUploadScript(executionId, caseId, name, effectiveMode, nlp, yamlScript, targetUrl);
+      }
+
       result.reportUrl = reportUrl;
       await this.notifyPlatform(task, result.status === 'completed' ? 'SUCCESS' : 'FAILED', reportUrl, duration, result);
 
@@ -91,6 +109,7 @@ export class Worker {
       }
     } catch (err) {
       await executionProducer?.stop();
+      releaseCollector(executionId);
       const duration = Date.now() - startTime;
       const message = (err as Error).message;
       const reportUrl = await this.uploadReportIfPresent(executionId, reportFileName);
@@ -141,6 +160,42 @@ export class Worker {
       if (!response.ok) throw new Error(`cache upload HTTP ${response.status}`);
     } catch (err) {
       logger.warn({ caseId, err }, 'cache upload failed');
+    }
+  }
+
+  /**
+   * 录制并上传 Playwright 重放脚本：
+   * CodeRecorder 从 locate/plan 缓存 + dump 收集器翻译生成 TS 脚本，
+   * 经平台内部接口 PUT /internal/scripts/{caseId} 回写并关联用例（失败不影响执行结果）。
+   */
+  private async recordAndUploadScript(
+    executionId: string,
+    caseId: string,
+    caseName: string,
+    mode: 'NLP' | 'YAML',
+    nlp: string,
+    yamlScript: string,
+    targetUrl?: string,
+  ): Promise<void> {
+    try {
+      const script = await this.codeRecorder.generateScript({
+        executionId, caseId, caseName, mode, nlp, yamlScript, targetUrl,
+      });
+      if (!script) return;
+      const config = getConfig();
+      const url = `${config.PLATFORM_REPORT_UPLOAD_URL.replace(/\/internal\/reports$/, '/internal/scripts')}/${encodeURIComponent(caseId)}?executionId=${encodeURIComponent(executionId)}`;
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          'x-report-upload-token': config.REPORT_UPLOAD_TOKEN,
+        },
+        body: script,
+      });
+      if (!response.ok) throw new Error(`script upload HTTP ${response.status}`);
+      logger.info({ caseId, executionId, bytes: script.length }, '录制脚本已上传平台');
+    } catch (err) {
+      logger.warn({ caseId, executionId, err }, 'recorded script upload failed (ignored)');
     }
   }
 

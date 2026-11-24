@@ -44,6 +44,11 @@ service.interceptors.response.use(
       return Promise.reject(error)
     }
     if (error.response) {
+      // 400 且后端带明确 error 文案时优先展示（如登录验证码错误）
+      if (error.response.status === 400 && error.response.data?.error) {
+        ElMessage.error(error.response.data.error)
+        return Promise.reject(error)
+      }
       switch (error.response.status) {
         case 401:
           ElMessage.error('未授权，请重新登录')

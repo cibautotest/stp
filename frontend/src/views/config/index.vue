@@ -74,6 +74,20 @@
                 <el-option label="其他" value="other" />
               </el-select>
             </el-form-item>
+            <el-form-item label="代码执行截图" prop="codeScreenshotMode">
+              <template #label>
+                <span>
+                  代码执行截图
+                  <el-tooltip content="CODE 执行模式的步骤截图策略：仅错误=只在失败/AI兜底步骤截图（报告小）；全步骤=每步都截图便于人工审读（报告较大）" placement="top">
+                    <el-icon class="tip-icon"><InfoFilled /></el-icon>
+                  </el-tooltip>
+                </span>
+              </template>
+              <el-select v-model="formData.codeScreenshotMode" class="full-width">
+                <el-option label="仅错误步骤（默认）" value="ERROR" />
+                <el-option label="全步骤截图" value="ALL" />
+              </el-select>
+            </el-form-item>
             <el-form-item>
               <el-button type="primary" :loading="saving" @click="handleSave">
                 <el-icon><Check /></el-icon>
@@ -147,7 +161,8 @@ const formData = reactive({
   baseUrl: '',
   apiKey: '',
   modelName: '',
-  modelFamily: ''
+  modelFamily: '',
+  codeScreenshotMode: 'ERROR' as 'ERROR' | 'ALL'
 })
 
 // 浏览器模式
@@ -167,6 +182,7 @@ const loadConfig = async () => {
   formData.apiKey = config.apiKey || ''
   formData.modelName = config.modelName || ''
   formData.modelFamily = config.modelFamily || ''
+  formData.codeScreenshotMode = config.codeScreenshotMode === 'ALL' ? 'ALL' : 'ERROR'
   browserMode.value = config.browserMode || 'headless'
 }
 
@@ -176,7 +192,8 @@ const handleSave = async () => {
   try {
     const success = await configStore.updateAIConfig({
       ...formData,
-      browserMode: browserMode.value
+      browserMode: browserMode.value,
+      codeScreenshotMode: formData.codeScreenshotMode
     })
     if (success) {
       ElMessage.success('配置保存成功')

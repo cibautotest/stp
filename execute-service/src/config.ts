@@ -21,6 +21,8 @@ const envSchema = z.object({
   PLATFORM_REPORT_UPLOAD_URL: z.string().default('http://localhost:8081/api/platform/internal/reports'),
   PLATFORM_REPORT_PUBLIC_BASE_URL: z.string().default('http://localhost:8081/api/platform/reports/content'),
   PLATFORM_CALLBACK_URL: z.string().default('http://localhost:8081/api/platform/callback/execution-result'),
+  // Platform base URL for misc callbacks (e.g. login-method cache status)
+  PLATFORM_BASE_URL: z.string().default('http://localhost:8081'),
   REPORT_UPLOAD_TOKEN: z.string().min(32),
   REPORT_CLEANUP_CRON: z.string().default('0 2 * * *'),
   OBSERVABILITY_ENABLED: z.string().transform(v => v === 'true').default('false'),

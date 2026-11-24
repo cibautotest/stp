@@ -38,6 +38,7 @@ public class AiConfigController {
         masked.setModelName(config.getModelName());
         masked.setModelFamily(config.getModelFamily());
         masked.setBrowserHeadless(config.getBrowserHeadless());
+        masked.setCodeScreenshotMode(config.getCodeScreenshotMode());
         String apiKey = config.getApiKey();
         masked.setApiKey(apiKey != null && apiKey.length() > 4 ? "****" + apiKey.substring(apiKey.length() - 4) : apiKey);
         return ResponseEntity.ok(masked);

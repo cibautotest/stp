@@ -19,4 +19,12 @@ public class LoginRequest {
     @Size(min = 6, max = 128, message = "password length must be 6-128")
     @Schema(description = "Password", requiredMode = Schema.RequiredMode.REQUIRED, minLength = 6, maxLength = 128)
     private String password;
+
+    @Size(max = 64, message = "captchaKey length must be at most 64")
+    @Schema(description = "Captcha key (required only when the client enforces captcha)", maxLength = 64)
+    private String captchaKey;
+
+    @Size(max = 8, message = "captchaCode length must be at most 8")
+    @Schema(description = "Captcha code typed by the user", maxLength = 8)
+    private String captchaCode;
 }

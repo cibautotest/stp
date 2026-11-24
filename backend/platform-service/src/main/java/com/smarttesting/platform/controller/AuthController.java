@@ -1,9 +1,11 @@
 package com.smarttesting.platform.controller;
 
 import com.smarttesting.platform.entity.User;
+import com.smarttesting.platform.model.CaptchaResponse;
 import com.smarttesting.platform.model.LoginRequest;
 import com.smarttesting.platform.model.UserSettingsRequest;
 import com.smarttesting.platform.service.AuthService;
+import com.smarttesting.platform.service.CaptchaService;
 import com.smarttesting.platform.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,9 +35,25 @@ public class AuthController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private CaptchaService captchaService;
+
+    @Operation(summary = "Generate image captcha for login")
+    @GetMapping("/captcha")
+    public ResponseEntity<CaptchaResponse> captcha() {
+        return ResponseEntity.ok(captchaService.generate());
+    }
+
     @Operation(summary = "Login")
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest body, HttpServletResponse response) {
+        // 验证码校验（可选语义：带 captchaKey 的客户端——平台前端登录页——强校验；
+        // 不带的客户端——Chrome 插件等——跳过，保持兼容）
+        if (body.getCaptchaKey() != null && !body.getCaptchaKey().isBlank()) {
+            if (!captchaService.verify(body.getCaptchaKey(), body.getCaptchaCode())) {
+                return ResponseEntity.status(400).body(Map.of("error", "验证码错误或已过期"));
+            }
+        }
         Map<String, Object> result = authService.login(body.getUsername(), body.getPassword(), response);
         if (result == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid username or password"));

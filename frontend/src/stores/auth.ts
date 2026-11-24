@@ -21,13 +21,18 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed(() => !!user.value)
   const isSysadmin = computed(() => user.value?.role === 'sysadmin')
 
-  async function login(username: string, password: string): Promise<boolean> {
+  async function login(username: string, password: string, captchaKey?: string, captchaCode?: string): Promise<boolean> {
     try {
-      const res: any = await apiLogin(username, password)
+      const res: any = await apiLogin(username, password, captchaKey, captchaCode)
       token.value = res.token || ''
       user.value = res.user
       return true
-    } catch (error) {
+    } catch (error: any) {
+      // 验证码错误（后端 400）向上抛，登录页需区分提示并刷新验证码；其他错误（401 等）维持 boolean 语义
+      const msg = error?.response?.data?.error || error?.message || ''
+      if (msg.includes('验证码')) {
+        throw new Error(msg)
+      }
       console.error('Login failed:', error)
       return false
     }

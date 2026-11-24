@@ -1,0 +1,22 @@
+---
+description: 改动层与部署物的对照规则：改了哪些层就必须重新部署哪些产物
+alwaysApply: true
+enabled: true
+provider: 
+---
+
+功能改动完成后，必须主动告知用户需要重新部署的范围（本地改动不会自动同步到服务器 10.3.71.x）：
+
+| 改动层 | 必须重新部署的产物 |
+|---|---|
+| `backend/**.java` | platform-service jar（`mvn -pl platform-service -am package -DskipTests`） |
+| `backend/**/sql/V*.sql` | 服务器 MySQL 执行迁移（**先去 BOM**） |
+| `frontend/src/**` | 前端 dist（`npm run build`） |
+| `execute-service/src/**` | 执行引擎 dist（`npm run build`） |
+| `测试用例可视化插件-v1.92/**` | 插件目录重新打包/重新加载 |
+| `.codebuddy/rules|skills|agents`、`openspec/**` | 无需部署（仅本地开发资产） |
+
+规则：
+- 回复中用一句话列出"本次部署清单"，不确定改动范围时先查 `git status`；
+- 服务器操作（上传/重启）只在用户明确要求时执行，详细流程见 `stp-deploy` 技能；
+- 部署后提醒验收：API 健康 + 登录冒烟 + 插件重新加载。

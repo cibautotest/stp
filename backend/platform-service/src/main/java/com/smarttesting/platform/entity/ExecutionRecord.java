@@ -31,6 +31,9 @@ public class ExecutionRecord {
     @Schema(description = "本次执行实际使用的执行机服务地址")
     private String executeServiceUrl;
 
+    @Schema(description = "执行下发时的用例内容哈希(sha256: nlp+yamlFlow)，用于录制脚本 STALE 竞态判定")
+    private String dispatchedContentHash;
+
     @Schema(description = "执行状态: PENDING/RUNNING/SUCCESS/FAILED")
     private String status;
 

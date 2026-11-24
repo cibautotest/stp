@@ -1,6 +1,6 @@
 // ── 队列任务 ──
 
-import type { KafkaConfig } from '../models/test-case.js';
+import type { KafkaConfig, LoginMethodPayload } from '../models/test-case.js';
 
 export interface QueueTask {
   executionId: string;
@@ -12,9 +12,15 @@ export interface QueueTask {
   headless: boolean;
   cacheContent?: string;
   reportFileName: string;
-  executionMode?: 'NLP' | 'YAML';
+  executionMode?: 'NLP' | 'YAML' | 'CODE';
+  /** CODE 模式：录制脚本内容 */
+  script?: string;
+  /** CODE 模式步骤截图模式：ERROR=仅失败/AI兜底步骤（默认），ALL=全步骤截图 */
+  screenshotMode?: 'ERROR' | 'ALL';
   trafficTaggingEnabled?: boolean;
   kafkaConfig?: KafkaConfig;
+  loginMethod?: LoginMethodPayload;
+  targetUrl?: string;
 }
 
 // ── 队列接口 ──

@@ -6,6 +6,7 @@ import com.smarttesting.platform.entity.AiConfig;
 import com.smarttesting.platform.entity.ExecutionRecord;
 import com.smarttesting.platform.entity.TestCase;
 import com.smarttesting.platform.mapper.ExecutionRecordMapper;
+import com.smarttesting.platform.util.CaseContentDigest;
 import com.smarttesting.platform.model.ExecuteRequest;
 import com.smarttesting.platform.model.ExecuteResponse;
 import org.slf4j.Logger;
@@ -89,8 +90,8 @@ public class ExecutionService {
             String executeServiceUrl = executeServiceUrlResolver.resolve(null, testCase.getProjectId());
             ExecuteResponse response = executeServiceGateway.asyncExecute(executeServiceUrl, request);
 
-            // 创建执行记录
-            createExecutionRecord(caseId, response.getExecutionId(), executeServiceUrl);
+            // 创建执行记录（记录下发时的用例内容哈希，供录制脚本 STALE 竞态判定）
+            createExecutionRecord(caseId, response.getExecutionId(), executeServiceUrl, CaseContentDigest.digest(testCase));
 
             Map<String, Object> result = new HashMap<>();
             result.put("caseId", caseId);
@@ -105,11 +106,12 @@ public class ExecutionService {
         }
     }
 
-    private void createExecutionRecord(String caseId, String executionId, String executeServiceUrl) {
+    private void createExecutionRecord(String caseId, String executionId, String executeServiceUrl, String dispatchedContentHash) {
         ExecutionRecord record = new ExecutionRecord();
         record.setCaseId(caseId);
         record.setExecutionId(executionId);
         record.setExecuteServiceUrl(executeServiceUrl);
+        record.setDispatchedContentHash(dispatchedContentHash);
         record.setStatus("RUNNING");
         record.setCreatedAt(LocalDateTime.now());
         record.setUpdatedAt(LocalDateTime.now());

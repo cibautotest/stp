@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { Orchestrator } from '../../core/orchestrator.js';
-import { executeAsyncSchema } from '../schemas.js';
+import { executeAsyncSchema, nullsToUndefined } from '../schemas.js';
 import { AppError } from '../../utils/errors.js';
 import { createLogger } from '../../utils/logger.js';
 import {
@@ -36,7 +36,7 @@ export async function asyncRoutes(server: FastifyInstance, orchestrator: Orchest
     }
 
     try {
-      const response = await orchestrator.executeAsync(parsed.data);
+      const response = await orchestrator.executeAsync(nullsToUndefined(parsed.data));
       log.info({ id: parsed.data.id, executionId: response.executionId }, '异步执行已提交');
       return reply.code(202).send(response);
     } catch (err) {

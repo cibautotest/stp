@@ -7,10 +7,21 @@ import type { ApiExchangeProducer, ApiExchangeEvent } from './kafka.js';
 
 type Pending = Omit<ApiExchangeEvent, 'response' | 'error' | 'completedAt'> & { startedAtMs: number };
 
+/** 报告内嵌用的接口请求摘要（无论 Kafka 是否开启都会记录，供 CODE 轻量报告展示） */
+export interface ApiExchangeSummary {
+  method: string;
+  url: string;
+  status?: number;
+  durationMs?: number;
+  error?: string;
+  startedAt: string;
+}
+
 export class NetworkObserver {
   private pending = new WeakMap<Request, Pending>();
   private publishing = new Set<Promise<void>>();
   private hosts = new Set(getConfig().OBSERVABILITY_API_HOSTS.split(',').map(v => v.trim().toLowerCase()).filter(Boolean));
+  private completed: ApiExchangeSummary[] = [];
 
   constructor(
     private executionId: string,
@@ -18,6 +29,11 @@ export class NetworkObserver {
     private producer: ApiExchangeProducer | undefined,
     private trafficTaggingEnabled = false,
   ) {}
+
+  /** 本次执行已观测到的接口请求摘要（按发生顺序） */
+  summary(): readonly ApiExchangeSummary[] {
+    return this.completed;
+  }
 
   async install(context: BrowserContext): Promise<void> {
     const observabilityEnabled = getConfig().OBSERVABILITY_ENABLED;
@@ -105,6 +121,14 @@ export class NetworkObserver {
     const event = this.pending.get(response.request());
     if (!event) return;
     this.pending.delete(response.request());
+    // 摘要先入列（报告内嵌展示不依赖 Kafka）
+    this.completed.push({
+      method: event.request.method,
+      url: event.request.url,
+      status: response.status(),
+      durationMs: Date.now() - event.startedAtMs,
+      startedAt: event.request.startedAt,
+    });
     if (!this.producer) return;
 
     const h = await response.allHeaders();
@@ -134,6 +158,12 @@ export class NetworkObserver {
     const event = this.pending.get(request);
     if (!event) return;
     this.pending.delete(request);
+    this.completed.push({
+      method: event.request.method,
+      url: event.request.url,
+      error,
+      startedAt: event.request.startedAt,
+    });
     if (!this.producer) return;
 
     logger.debug({ executionId: this.executionId, requestId: event.requestId, error, url: event.request.url }, 'Publishing failed API exchange to Kafka');

@@ -4,9 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smarttesting.platform.entity.Report;
 import com.smarttesting.platform.entity.TestCase;
-import com.smarttesting.platform.mapper.ApiExchangeMapper;
-import com.smarttesting.platform.mapper.ReportMapper;
 import com.smarttesting.platform.model.ExecutionCallbackRequest;
+import com.smarttesting.platform.service.ExecutionReportService;
 import com.smarttesting.platform.service.TestCaseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,10 +34,7 @@ public class ExecutionCallbackController {
     private TestCaseService testCaseService;
 
     @Resource
-    private ReportMapper reportMapper;
-
-    @Resource
-    private ApiExchangeMapper apiExchangeMapper;
+    private ExecutionReportService executionReportService;
 
     @Operation(summary = "Receive execution result callback")
     @PostMapping("/execution-result")
@@ -69,6 +65,7 @@ public class ExecutionCallbackController {
 
             Report report = new Report();
             report.setCaseId(caseId);
+            report.setType("SINGLE");
             report.setStatus(normalizedStatus);
             report.setName(testCase != null ? testCase.getName() : caseId);
             report.setProjectId(testCase != null ? testCase.getProjectId() : null);
@@ -85,10 +82,7 @@ public class ExecutionCallbackController {
             } catch (JsonProcessingException e) {
                 log.warn("Failed to serialize logs", e);
             }
-            reportMapper.insert(report);
-            if (executionId != null) {
-                apiExchangeMapper.updateReportIdByExecutionId(executionId, report.getId());
-            }
+            executionReportService.upsertSingleReport(report, executionId);
 
             log.info("Execution result saved: caseId={}, status={}", caseId, status);
             return ResponseEntity.ok(Map.of("success", true));

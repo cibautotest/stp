@@ -82,6 +82,7 @@ const handleLogin = async () => {
 
     loading.value = true
     try {
+      // 验证码登录暂不启用：不带 captchaKey 登录（后端条件校验，缺省即跳过）
       const success = await authStore.login(formData.username, formData.password)
       if (success) {
         ElMessage.success('登录成功')
@@ -89,8 +90,6 @@ const handleLogin = async () => {
       } else {
         ElMessage.error('用户名或密码错误')
       }
-    } catch (error) {
-      ElMessage.error('登录失败，请检查网络连接')
     } finally {
       loading.value = false
     }

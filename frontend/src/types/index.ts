@@ -27,7 +27,11 @@ export interface TestCase {
   description?: string
   nlp?: string
   yamlFlow?: string
-  executionMode?: 'NLP' | 'YAML'
+  executionMode?: 'NLP' | 'YAML' | 'CODE'
+  script?: string
+  scriptStatus?: 'NONE' | 'RECORDED' | 'STALE'
+  scriptSourceExecutionId?: string
+  scriptRecordedAt?: string
   status?: CaseStatusType
   htmlReportPath?: string
   cacheContent?: string
@@ -100,6 +104,8 @@ export interface AIConfig {
   modelName: string
   modelFamily: string
   browserMode: 'headless' | 'headful'
+  /** CODE 执行步骤截图模式：ERROR=仅失败/AI兜底步骤（默认），ALL=全步骤截图 */
+  codeScreenshotMode?: 'ERROR' | 'ALL'
 }
 
 // Flow步骤类型（Midscene 全量 action 类型）

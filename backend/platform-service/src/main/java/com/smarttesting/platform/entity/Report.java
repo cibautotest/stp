@@ -24,6 +24,9 @@ public class Report {
     @Schema(description = "批次ID（批量执行关联）")
     private String batchId;
 
+    @Schema(description = "执行记录ID（幂等去重键）")
+    private String executionId;
+
     @Schema(description = "报告类型: SINGLE/BATCH")
     private String type;
 

@@ -1,0 +1,26 @@
+---
+description: Git 提交信息格式与提交时机规范
+alwaysApply: true
+enabled: true
+provider: 
+---
+
+## 提交时机（红线）
+
+- **未经用户明确要求，绝不执行 `git commit`**；用户说"提交"才提交；
+- 禁止 `commit --amend`、`push --force`、`reset --hard`，除非用户点名要求；
+- 提交前 `git status` + `git diff --stat` 确认范围，**不提交**：`logs/`、临时脚本、`node_modules`、`.env`、探测数据文件、`.codebuddy/teams/` 等运行态数据。
+
+## 提交信息格式
+
+```
+<type>(<scope>): <中文摘要>
+
+- 要点 1
+- 要点 2
+```
+
+- type：`feat` 新功能 / `fix` 修复 / `refactor` 重构 / `docs` 文档 / `chore` 杂项 / `test` 测试
+- scope：`platform`（后端）/ `frontend` / `executor`（执行引擎）/ `plugin` / `rules`（规则与技能）/ `spec`（openspec）
+- 示例：`feat(platform): 登录方式独立缓存与缓存状态回调`
+- 跨层改动用主 scope，正文列各层要点；一次提交只做一件事，不混不相关内容。
