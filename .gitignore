@@ -1,4 +1,9 @@
-# Maven
+# =====================================================
+# 智能测试中台（STP）忽略规则
+# 原则：源码与配置模板入库；依赖、构建产物、运行态数据、密钥一律忽略
+# =====================================================
+
+# ── Java / Maven ──
 target/
 !.mvn/wrapper/maven-wrapper.jar
 pom.xml.tag
@@ -6,8 +11,63 @@ pom.xml.releaseBackup
 pom.xml.versionsBackup
 pom.xml.next
 release.properties
+*.class
+*.war
+*.ear
+.flattened-pom.xml
 
-# IDE
+# 注意：业务代码仍需 jar 时才放开；默认忽略第三方/依赖 jar
+*.jar
+
+# ── Node / 前端 ──
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# pnpm 内容寻址缓存（曾被误跟踪，见 chore 提交）
+.pnpm-store/
+.pnpm/
+
+# ── Python 本地虚拟环境（项目根目录由 IDE 生成，不属于源码） ──
+/Include/
+/Lib/
+/Scripts/
+/pyvenv.cfg
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# ── 执行引擎运行态（Playwright / Midscene） ──
+**/midscene_run/**
+playwright-report/
+test-results/
+blob-report/
+**/midscene_run/reports/
+
+# ── 平台运行态与日志 ──
+logs/
+*.log
+*.pid
+data/reports/
+reports/
+
+# ── 密钥与环境变量（只允许提交示例模板） ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+
+# ── IDE / 编辑器 ──
 .idea/
 *.iml
 *.ipr
@@ -16,33 +76,34 @@ release.properties
 .classpath
 .settings/
 .vscode/
+*.swp
+*.swo
 
-# Logs
-*.log
-logs/
-
-# OS
+# ── 操作系统 ──
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Node
-**/node_modules/**
-**/dist/**
-
-# Midscene
-**/midscene_run/**
-**/midscene_run/reports/
-
-# Spring
-*.class
-
-# Package files
-*.jar
-*.war
-*.ear
-
-# Temp files
+# ── 压缩包与临时文件 ──
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
 *.tmp
-*.swp
 *.bak
-*.pid
+*.orig
+*.rej
+~$*
+_run_test.bat
+
+# ── 仓库内不应入库的副本/临时资源 ──
+# 插件解压副本（与 测试用例可视化插件-v1.92/ 重复）
+/1.92_0/
+# 0 字节误建文件
+/Platform
+# PPT 解包临时目录
+docs/1111_unpacked/
+
+# ── AI 协作运行态（规则/技能/agent 定义仍需入库） ──
+.codebuddy/teams/
